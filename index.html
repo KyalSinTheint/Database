@@ -44,7 +44,7 @@
                 </div>
                 <div>
                     <h1 class="text-xl font-bold tracking-tight">Training Record Database Portal</h1>
-                    <p class="text-xs text-blue-200">Cloud Synced &bull; Supabase Backend Connected</p>
+                    <p class="text-xs text-blue-200" id="syncStatus">Connecting&hellip;</p>
                 </div>
             </div>
 
@@ -57,10 +57,10 @@
                 </div>
 
                 <div id="adminActionGroup" class="flex flex-wrap items-center gap-2">
-                    <button type="button" onclick="triggerCSVImport()" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shadow" title="Upload QR Code Responses CSV">
-                        <i class="fa-solid fa-qrcode"></i> Import QR CSV
+                    <button type="button" onclick="triggerCSVImport()" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shadow" title="Upload Excel (.xlsx) or CSV attendance file">
+                        <i class="fa-solid fa-file-import"></i> Import Excel / CSV
                     </button>
-                    <input type="file" id="csvFileInput" accept=".csv" onchange="handleCSVFile(event)" class="hidden">
+                    <input type="file" id="csvFileInput" accept=".xlsx,.xls,.csv" onchange="handleCSVFile(event)" class="hidden">
                     
                     <button type="button" onclick="openDuplicateAuditModal()" class="bg-teal-700 hover:bg-teal-600 text-white px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shadow">
                         <i class="fa-solid fa-wand-magic-sparkles"></i> Audit Typos
@@ -88,7 +88,7 @@
     <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-6">
         
         <!-- Summary Stat Cards -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-4 mb-6">
             <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
                 <div>
                     <p class="text-[11px] text-gray-500 font-semibold uppercase tracking-wider">TOTAL UNIQUE ATTENDEES</p>
@@ -116,6 +116,27 @@
                     <p class="text-xl font-bold text-purple-700 mt-1" id="statLicensing">0</p>
                 </div>
                 <div class="bg-purple-50 text-purple-600 p-3 rounded-lg"><i class="fa-solid fa-award text-lg"></i></div>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
+                <div>
+                    <p class="text-[11px] text-gray-500 font-semibold uppercase tracking-wider">Agency Sessions</p>
+                    <p class="text-xl font-bold text-orange-700 mt-1" id="statAgency">0</p>
+                </div>
+                <div class="bg-orange-50 text-orange-600 p-3 rounded-lg"><i class="fa-solid fa-handshake text-lg"></i></div>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
+                <div>
+                    <p class="text-[11px] text-gray-500 font-semibold uppercase tracking-wider">Vocational Sessions</p>
+                    <p class="text-xl font-bold text-teal-700 mt-1" id="statVoc">0</p>
+                </div>
+                <div class="bg-teal-50 text-teal-600 p-3 rounded-lg"><i class="fa-solid fa-screwdriver-wrench text-lg"></i></div>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
+                <div>
+                    <p class="text-[11px] text-gray-500 font-semibold uppercase tracking-wider">YCP Sessions</p>
+                    <p class="text-xl font-bold text-amber-700 mt-1" id="statYcp">0</p>
+                </div>
+                <div class="bg-amber-50 text-amber-600 p-3 rounded-lg"><i class="fa-solid fa-user-graduate text-lg"></i></div>
             </div>
         </div>
 
@@ -464,6 +485,56 @@
         window.activeAttCategory = null;
         window.activeAttModule = null;
 
+        // One entry per training category. Summary tab renders all of them.
+        window.categoryConfig = [
+            { key: 'sales',        label: 'Sales (P&S)',  base: () => window.salesModules,       head: 'bg-emerald-800', sub: 'bg-emerald-50', chip: 'bg-emerald-100 text-emerald-800' },
+            { key: 'development',  label: 'Development',  base: () => window.developmentModules, head: 'bg-indigo-800',  sub: 'bg-indigo-50',  chip: 'bg-indigo-100 text-indigo-800' },
+            { key: 'agency',       label: 'Agency',       base: () => window.agencyModules,      head: 'bg-orange-800',  sub: 'bg-orange-50',  chip: 'bg-orange-100 text-orange-800' },
+            { key: 'vocational',   label: 'Vocational',   base: () => window.vocationalModules,  head: 'bg-teal-800',    sub: 'bg-teal-50',    chip: 'bg-teal-100 text-teal-800' },
+            { key: 'ycp',          label: 'YCP',          base: () => window.ycpModules,         head: 'bg-amber-800',   sub: 'bg-amber-50',   chip: 'bg-amber-100 text-amber-800' },
+            { key: 'licensingAtt', label: 'Licensing',    base: () => window.licensingDays,      head: 'bg-purple-800',  sub: 'bg-purple-50',  chip: 'bg-purple-100 text-purple-800' }
+        ];
+
+        function moduleKey(m) { return String(m || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+
+        // Base module list plus any extra module names that exist in the data (e.g. from an import)
+        function getModulesFor(catKey, baseList) {
+            const list = [...baseList];
+            const known = new Set(list.map(moduleKey));
+            (window.employees || []).forEach(emp => {
+                Object.entries(emp[catKey] || {}).forEach(([m, arr]) => {
+                    if (Array.isArray(arr) && arr.length > 0 && !known.has(moduleKey(m))) { known.add(moduleKey(m)); list.push(m); }
+                });
+            });
+            return list;
+        }
+
+        function jsAttr(v) { return String(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+        function setSyncStatus(state, detail) {
+            const el = document.getElementById('syncStatus');
+            if (!el) return;
+            const labels = {
+                offline: 'Offline mode &bull; data saved in this browser only',
+                saving:  'Saving to cloud&hellip;',
+                saved:   'Cloud synced &bull; Supabase',
+                live:    '<span class="inline-block w-2 h-2 rounded-full bg-emerald-400 mr-1"></span>Live &bull; Cloud synced &bull; Supabase',
+                error:   '<span class="text-red-300 font-bold">Cloud save failed</span>'
+            };
+            el.innerHTML = (labels[state] || state) + (detail ? ' &bull; ' + detail : '');
+            if (state === 'live' || state === 'saved') window.lastGoodStatus = state;
+        }
+
+        // Key-order independent JSON, so local data and data read back from Postgres (jsonb) compare equal
+        function stableStringify(v) {
+            if (Array.isArray(v)) return '[' + v.map(x => stableStringify(x === undefined ? null : x)).join(',') + ']';
+            if (v && typeof v === 'object') {
+                return '{' + Object.keys(v).sort().filter(k => v[k] !== undefined)
+                    .map(k => JSON.stringify(k) + ':' + stableStringify(v[k])).join(',') + '}';
+            }
+            return JSON.stringify(v === undefined ? null : v);
+        }
+
         function setPortalMode(mode) {
             window.portalMode = mode;
             const btnAdmin = document.getElementById('modeBtnAdmin');
@@ -580,27 +651,65 @@
             recalculateAllEmployeeIDs();
         }
 
+        // ---------------- Cloud sync (Supabase) ----------------
+        let lastSyncedRows = {};        // emp_id -> signature of the row as stored in the cloud
+        let lastOptsSig = null;         // signature of dropdown options in the cloud
+        let syncTimer = null, syncPending = false, syncing = false, syncAgain = false;
+
+        function buildRow(emp, i) {
+            return {
+                emp_id: emp.EmpID,
+                name: emp.Name ?? null,
+                nrc: emp.NRC ?? null,
+                department: emp.Department ?? null,
+                branch_name: emp.BranchName ?? null,
+                internal_external: emp.InternalExternal ?? null,
+                position: i,
+                data_json: emp
+            };
+        }
+
+        async function fetchCloud() {
+            const { data, error } = await supabaseClient
+                .from('trainings')
+                .select('emp_id,name,nrc,department,branch_name,internal_external,position,data_json')
+                .order('position');
+            if (error) return { error };
+            const { data: optRow, error: optErr } = await supabaseClient
+                .from('app_settings').select('value').eq('key', 'dropdown_options').maybeSingle();
+            if (optErr) console.error('Supabase settings load failed:', optErr.message);
+            return { rows: data || [], opts: optRow ? optRow.value : null };
+        }
+
+        function rememberCloud(rows, opts) {
+            lastSyncedRows = {};
+            rows.forEach(r => { if (r.emp_id) lastSyncedRows[r.emp_id] = stableStringify(r); });
+            lastOptsSig = opts ? stableStringify(opts) : null;
+        }
+
         async function loadData() {
             if (supabaseClient) {
-                const { data, error } = await supabaseClient
-                    .from('trainings').select('data_json').order('position');
-                if (error) {
+                const res = await fetchCloud();
+                if (res.error) {
                     // Never sync after a failed load, or an empty page could wipe the cloud data
-                    console.error('Supabase load failed:', error.message);
-                    alert('Could not load data from the cloud. Working offline; changes will NOT be synced.');
+                    console.error('Supabase load failed:', res.error.message);
+                    alert('Could not load data from the cloud (' + res.error.message + '). Working offline; changes will NOT be synced.');
                     supabaseClient = null;
-                }
-                if (!error && data && data.length > 0) {
-                    window.employees = data.map(row => row.data_json);
-                    const { data: opts } = await supabaseClient
-                        .from('app_settings').select('value').eq('key', 'dropdown_options').maybeSingle();
-                    if (opts && opts.value) window.dropdownOptions = opts.value;
-                    normalizeEmployeesData();
-                    populateDropdowns();
-                    renderTable();
-                    return;
+                } else {
+                    rememberCloud(res.rows, res.opts);
+                    subscribeRealtime();
+                    if (res.rows.length > 0) {
+                        window.employees = res.rows.map(r => r.data_json).filter(Boolean);
+                        if (res.opts) window.dropdownOptions = res.opts;
+                        normalizeEmployeesData();
+                        populateDropdowns();
+                        renderTable();
+                        return;
+                    }
                 }
             }
+            if (!supabaseClient) setSyncStatus('offline');
+            // Cloud is empty (or offline): start from this browser's saved copy; it is uploaded on the first sync
             const savedEmp = localStorage.getItem('kbz_training_employees');
             if (savedEmp) { try { window.employees = JSON.parse(savedEmp); } catch(e) {} }
             const savedOpts = localStorage.getItem('kbz_training_options');
@@ -610,43 +719,116 @@
             renderTable();
         }
 
-        let syncTimer = null;
-        async function saveData() {
-            localStorage.setItem('kbz_training_employees', JSON.stringify(window.employees));
-            localStorage.setItem('kbz_training_options', JSON.stringify(window.dropdownOptions));
+        function saveData() {
+            try {
+                localStorage.setItem('kbz_training_employees', JSON.stringify(window.employees));
+                localStorage.setItem('kbz_training_options', JSON.stringify(window.dropdownOptions));
+            } catch(e) { console.warn('Browser storage unavailable:', e); }
             if (!supabaseClient) return;
+            syncPending = true;
             clearTimeout(syncTimer);
             syncTimer = setTimeout(syncToSupabase, 800);   // batch rapid edits into one sync
         }
 
+        // Sync immediately (used after an import so the user gets a clear result)
+        async function syncNow() {
+            if (!supabaseClient) return true;
+            clearTimeout(syncTimer);
+            while (syncing) await new Promise(r => setTimeout(r, 200));
+            return syncToSupabase();
+        }
+
         async function syncToSupabase() {
-            const rows = window.employees.map((emp, i) => ({
-                emp_id: emp.EmpID,
-                name: emp.Name,
-                nrc: emp.NRC,
-                department: emp.Department,
-                branch_name: emp.BranchName,
-                internal_external: emp.InternalExternal,
-                position: i,
-                data_json: emp,
-                updated_at: new Date().toISOString()
-            }));
+            if (!supabaseClient) return true;
+            if (syncing) { syncAgain = true; return true; }
+            syncing = true; syncPending = false;
+            let ok = true;
+            try {
+                const rows = window.employees.map(buildRow).filter(r => r.emp_id);
+                const sigs = {};
+                rows.forEach(r => { sigs[r.emp_id] = stableStringify(r); });
 
-            if (rows.length) {
-                const { error } = await supabaseClient.from('trainings').upsert(rows, { onConflict: 'emp_id' });
-                if (error) { console.error(error); alert('Cloud save failed: ' + error.message); return; }
+                // 1) Upsert only rows that changed
+                const changed = rows.filter(r => lastSyncedRows[r.emp_id] !== sigs[r.emp_id]);
+                if (changed.length) setSyncStatus('saving');
+                for (let i = 0; i < changed.length; i += 500) {
+                    const chunk = changed.slice(i, i + 500).map(r => ({ ...r, updated_at: new Date().toISOString() }));
+                    const { error } = await supabaseClient.from('trainings').upsert(chunk, { onConflict: 'emp_id' });
+                    if (error) throw error;
+                    chunk.forEach(r => { lastSyncedRows[r.emp_id] = sigs[r.emp_id]; });
+                }
+
+                // 2) Delete rows this browser knew about that no longer exist (deleted or renumbered)
+                const stale = Object.keys(lastSyncedRows).filter(id => !(id in sigs));
+                for (let i = 0; i < stale.length; i += 200) {
+                    const chunk = stale.slice(i, i + 200);
+                    const { error } = await supabaseClient.from('trainings').delete().in('emp_id', chunk);
+                    if (error) throw error;
+                    chunk.forEach(id => delete lastSyncedRows[id]);
+                }
+
+                // 3) Dropdown options
+                const optSig = stableStringify(window.dropdownOptions);
+                if (optSig !== lastOptsSig) {
+                    const { error } = await supabaseClient.from('app_settings')
+                        .upsert({ key: 'dropdown_options', value: window.dropdownOptions });
+                    if (error) throw error;
+                    lastOptsSig = optSig;
+                }
+                setSyncStatus(window.realtimeLive ? 'live' : 'saved');
+            } catch (error) {
+                ok = false;
+                console.error('Cloud save failed:', error);
+                setSyncStatus('error', error.message);
+                alert('Cloud save failed: ' + error.message);
+            } finally {
+                syncing = false;
+                if (syncAgain) { syncAgain = false; syncToSupabase(); }
             }
+            return ok;
+        }
 
-            // Remove rows that no longer exist locally (deleted or renumbered)
-            const ids = rows.map(r => `"${r.emp_id}"`).join(',');
-            let del = supabaseClient.from('trainings').delete();
-            del = rows.length ? del.not('emp_id', 'in', `(${ids})`) : del.neq('emp_id', '');
-            const { error: delErr } = await del;
-            if (delErr) console.error('Cloud delete failed:', delErr.message);
+        // ---------------- Realtime: refresh when another user changes data ----------------
+        let remoteTimer = null;
+        function subscribeRealtime() {
+            if (!supabaseClient || window.rtChannel) return;
+            window.rtChannel = supabaseClient.channel('training-db-live')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'trainings' }, scheduleRemoteReload)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, scheduleRemoteReload)
+                .subscribe(status => {
+                    window.realtimeLive = (status === 'SUBSCRIBED');
+                    setSyncStatus(window.realtimeLive ? 'live' : 'saved');
+                    if (status === 'SUBSCRIBED') scheduleRemoteReload();   // catch up on anything missed while reconnecting
+                });
+        }
 
-            const { error: optErr } = await supabaseClient.from('app_settings')
-                .upsert({ key: 'dropdown_options', value: window.dropdownOptions });
-            if (optErr) console.error('Cloud settings save failed:', optErr.message);
+        function scheduleRemoteReload() {
+            clearTimeout(remoteTimer);
+            remoteTimer = setTimeout(applyRemoteReload, 1200);
+        }
+
+        function anyEditModalOpen() {
+            return ['employeeModal', 'attendanceModal', 'duplicateAuditModal', 'settingsModal']
+                .some(id => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); });
+        }
+
+        async function applyRemoteReload() {
+            if (!supabaseClient) return;
+            // Do not pull while this browser has unsaved edits or the user is editing
+            if (syncing || syncPending || anyEditModalOpen()) { scheduleRemoteReload(); return; }
+            const res = await fetchCloud();
+            if (res.error) { console.error('Realtime refresh failed:', res.error.message); return; }
+            if (syncing || syncPending) { scheduleRemoteReload(); return; }
+            const incoming = res.rows.map(r => r.data_json).filter(Boolean);
+            const sameEmp = stableStringify(incoming) === stableStringify(window.employees);
+            const sameOpts = !res.opts || stableStringify(res.opts) === stableStringify(window.dropdownOptions);
+            rememberCloud(res.rows, res.opts);
+            if (sameEmp && sameOpts) return;
+            window.employees = incoming;
+            if (res.opts) window.dropdownOptions = res.opts;
+            normalizeEmployeesData();
+            populateDropdowns();
+            renderTable();
         }
 
         window.switchTab = function(tab) {
@@ -660,8 +842,9 @@
         function populateDropdowns() {
             const fDept = document.getElementById('filterDepartment');
             const fBranch = document.getElementById('filterBranch');
-            if (fDept) fDept.innerHTML = '<option value="">All Departments</option>' + (window.dropdownOptions.departments || []).map(d => `<option value="${d}">${d}</option>`).join('');
-            if (fBranch) fBranch.innerHTML = '<option value="">All Branches</option>' + (window.dropdownOptions.branches || []).map(b => `<option value="${b}">${b}</option>`).join('');
+            const keepDept = fDept ? fDept.value : '', keepBranch = fBranch ? fBranch.value : '';
+            if (fDept) { fDept.innerHTML = '<option value="">All Departments</option>' + (window.dropdownOptions.departments || []).map(d => `<option value="${d}">${d}</option>`).join(''); fDept.value = keepDept; }
+            if (fBranch) { fBranch.innerHTML = '<option value="">All Branches</option>' + (window.dropdownOptions.branches || []).map(b => `<option value="${b}">${b}</option>`).join(''); fBranch.value = keepBranch; }
 
             const mDept = document.getElementById('empDept');
             const mRegion = document.getElementById('empRegion');
@@ -772,6 +955,9 @@
             document.getElementById('statSales').innerText = getUniqueDatesCount('sales');
             document.getElementById('statDev').innerText = getUniqueDatesCount('development');
             document.getElementById('statLicensing').innerText = getUniqueBatchesCount();
+            document.getElementById('statAgency').innerText = getUniqueDatesCount('agency');
+            document.getElementById('statVoc').innerText = getUniqueDatesCount('vocational');
+            document.getElementById('statYcp').innerText = getUniqueDatesCount('ycp');
 
             const filtered = getFilteredEmployees();
             let attendedCount = 0, answeredCount = 0, notAnsweredCount = 0, niimPassedCount = 0, niimFailedCount = 0;
@@ -852,8 +1038,12 @@
             recalculateAllEmployeeIDs(); alert(`Combined ${combined} pair(s) successfully!`); runTypoAuditScan();
         };
 
-        window.triggerCSVImport = function() { document.getElementById('csvFileInput').click(); };
-        
+        window.triggerCSVImport = function() {
+            const el = document.getElementById('csvFileInput');
+            el.value = '';   // allow importing the same file name again
+            el.click();
+        };
+
         function parseCSVRow(textRow) {
             let result = [];
             let current = '';
@@ -868,114 +1058,213 @@
             return result;
         }
 
+        function pad2(n) { return String(n).padStart(2, '0'); }
+        function ymd(d) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
+
+        function cellToText(v) {
+            if (v instanceof Date && !isNaN(v)) {
+                // round to the nearest minute: Excel date conversion can land a few seconds before midnight
+                return ymd(new Date(Math.round(v.getTime() / 60000) * 60000));
+            }
+            return v === null || v === undefined ? '' : String(v).trim();
+        }
+
+        // Turn any date/timestamp text into YYYY-MM-DD so the same day is never counted twice
+        function normalizeDateText(raw) {
+            const s = String(raw || '').trim().split(/[ T]/)[0];
+            if (!s) return ymd(new Date());
+            let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/);
+            if (m) return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
+            m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})$/);
+            if (m) {
+                let a = +m[1], b = +m[2], y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
+                // Default month/day (Google Forms style); switch to day/month when the first number can't be a month
+                let month = a, day = b;
+                if (a > 12 && b <= 12) { month = b; day = a; }
+                return `${y}-${pad2(month)}-${pad2(day)}`;
+            }
+            if (/^\d{5}$/.test(s)) {   // raw Excel serial number
+                const d = new Date(Math.round((+s - 25569) * 86400000));
+                return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+            }
+            return s;
+        }
+
+        function normalizeName(n) { return String(n || '').toLowerCase().replace(/[.\s]+/g, ' ').trim(); }
+        function personKey(name, nrc) { return normalizeName(name) + '|' + normalizeString(nrc); }
+
         window.handleCSVFile = function(event) {
             const file = event.target.files[0];
             if (!file) return;
+            const isCsv = /\.csv$/i.test(file.name);
             const reader = new FileReader();
-            reader.onload = function(e) { parseCSVAndImport(e.target.result); };
-            reader.readAsText(file);
+            if (isCsv) {
+                reader.onload = e => importRows(String(e.target.result).replace(/^\uFEFF/, '')
+                    .split(/\r?\n/).filter(l => l.trim().length > 0).map(parseCSVRow));
+                reader.readAsText(file);
+            } else {
+                if (typeof XLSX === 'undefined') { alert('Excel reader is still loading. Please try again in a moment.'); return; }
+                reader.onload = e => {
+                    try {
+                        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+                        const ws = wb.Sheets[wb.SheetNames[0]];
+                        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' })
+                            .map(r => r.map(cellToText))
+                            .filter(r => r.some(c => c !== ''));
+                        importRows(rows);
+                    } catch (err) {
+                        alert('Could not read the Excel file: ' + err.message);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            }
         };
 
-        function parseCSVAndImport(csvText) {
-            const lines = csvText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-            if (lines.length < 2) { alert("CSV file contains no data rows."); return; }
+        // rows[0] = header row, the rest = one attendance record per row
+        async function importRows(rows) {
+            if (!rows || rows.length < 2) { alert("The file contains no data rows."); return; }
 
-            const rawHeaders = parseCSVRow(lines[0]).map(h => h.toLowerCase().trim());
-            const findCol = (keywords) => rawHeaders.findIndex(h => keywords.some(k => h.includes(k)));
+            const headers = rows[0].map(h => String(h).toLowerCase().replace(/\s+/g, ' ').trim());
+            // exact header match first, then "contains"; skip headers containing an excluded word
+            const findCol = (keywords, exclude = []) => {
+                const ok = h => !exclude.some(x => h.includes(x));
+                for (const k of keywords) { const i = headers.findIndex(h => h === k && ok(h)); if (i !== -1) return i; }
+                for (const k of keywords) { const i = headers.findIndex(h => h.includes(k) && ok(h)); if (i !== -1) return i; }
+                return -1;
+            };
 
-            const colName = findCol(['full name', 'name', 'trainee name', 'employee name']);
+            const colName = findCol(['full name', 'name', 'trainee name', 'employee name'], ['branch', 'module', 'bank', 'father', 'training']);
             const colNRC = findCol(['nrc', 'nrc number', 'nrc no']);
             const colPos = findCol(['position', 'title', 'designation']);
             const colDept = findCol(['department', 'depatment', 'dept']);
             const colRegion = findCol(['region', 'state']);
             const colBranch = findCol(['bank branch name', 'branch name', 'branch']);
             const colPhone = findCol(['phone number', 'phone', 'mobile', 'contact']);
-            const colType = findCol(['training type', 'type', 'internal/external']);
-            const colTime = findCol(['timestamp', 'time', 'date', 'attendance date']);
-            const colModule = findCol(['training module', 'module name', 'module', 'session']);
+            const colIE = findCol(['internal/external', 'internal / external', 'internal or external']);
+            const colType = findCol(['training type', 'category', 'type'], ['internal', 'external']);
+            const colTime = findCol(['attendance date', 'training date', 'date', 'timestamp', 'time']);
+            const colModule = findCol(['training module', 'module name', 'module', 'session', 'course']);
 
-            let updatedCount = 0;
-            for (let i = 1; i < lines.length; i++) {
-                const vals = parseCSVRow(lines[i]);
-                if (vals.length < 2) continue;
+            if (colName === -1 && colNRC === -1) {
+                alert('Could not find a "Name" or "NRC" column in the first row of the file.');
+                return;
+            }
 
-                const nrcVal = colNRC !== -1 ? vals[colNRC] : '';
-                const cleanNrc = normalizeString(nrcVal);
-                const nameVal = colName !== -1 ? vals[colName] : '';
-                const phoneVal = colPhone !== -1 ? vals[colPhone] : '';
+            // Look up existing people by Name + NRC
+            const index = new Map();
+            window.employees.forEach(emp => index.set(personKey(emp.Name, emp.NRC), emp));
+            const nrcOnly = new Map();
+            window.employees.forEach(emp => { const k = normalizeString(emp.NRC); if (k) nrcOnly.set(k, emp); });
 
-                if (!cleanNrc && !nameVal) continue;
+            const catFromType = t => {
+                if (t.includes('licens')) return 'licensingAtt';
+                if (t.includes('sales') || t.includes('product') || t.includes('p&s')) return 'sales';
+                if (t.includes('dev')) return 'development';
+                if (t.includes('agency')) return 'agency';
+                if (t.includes('vocat')) return 'vocational';
+                if (t.includes('ycp') || t.includes('ambassador')) return 'ycp';
+                return null;
+            };
+            const catFromModule = m => {
+                const k = moduleKey(m);
+                const hit = window.categoryConfig.find(c => c.base().some(x => moduleKey(x) === k));
+                return hit ? hit.key : null;
+            };
+            const canonicalModule = (catKey, m) => {
+                const cfg = window.categoryConfig.find(c => c.key === catKey);
+                const hit = cfg ? cfg.base().find(x => moduleKey(x) === moduleKey(m)) : null;
+                return hit || String(m).trim();
+            };
+            const get = (vals, col) => (col !== -1 && vals[col] !== undefined) ? String(vals[col]).trim() : '';
 
-                let empIndex = -1;
-                for (let eIdx = 0; eIdx < window.employees.length; eIdx++) {
-                    let existing = window.employees[eIdx];
-                    let eCleanNrc = normalizeString(existing.NRC);
-                    if (cleanNrc && eCleanNrc && cleanNrc === eCleanNrc) { empIndex = eIdx; break; }
-                    if (phoneVal && existing.PhoneNumber && phoneVal.trim() === existing.PhoneNumber.trim()) { empIndex = eIdx; break; }
-                    if (getSimilarityScore(nameVal, existing.Name || '') >= 0.85) { empIndex = eIdx; break; }
+            let newPeople = 0, updatedPeople = 0, newAttendance = 0, alreadyRecorded = 0, sameNrcDifferentName = 0;
+            const touched = new Set();
+
+            for (let i = 1; i < rows.length; i++) {
+                const vals = rows[i];
+                const nameVal = get(vals, colName);
+                const nrcVal = get(vals, colNRC);
+                if (!nameVal && !nrcVal) continue;
+
+                const key = personKey(nameVal, nrcVal);
+                let empObj = index.get(key);
+                const isNew = !empObj;
+                if (isNew) {
+                    if (normalizeString(nrcVal) && nrcOnly.has(normalizeString(nrcVal))) sameNrcDifferentName++;
+                    empObj = {
+                        Name: nameVal || 'New Trainee',
+                        NRC: nrcVal,
+                        Position: get(vals, colPos),
+                        Department: get(vals, colDept) || 'Vocational Training',
+                        InternalExternal: get(vals, colIE) || 'Internal',
+                        Region: get(vals, colRegion),
+                        BranchName: get(vals, colBranch),
+                        PhoneNumber: get(vals, colPhone),
+                        sales: {}, development: {}, agency: {}, vocational: {}, ycp: {}, licensingAtt: {}, licensing: {}
+                    };
+                    window.employees.push(empObj);
+                    index.set(key, empObj);
+                    if (normalizeString(nrcVal)) nrcOnly.set(normalizeString(nrcVal), empObj);
+                    newPeople++;
+                } else if (!touched.has(empObj)) {
+                    updatedPeople++;
                 }
+                touched.add(empObj);
 
-                let empObj = empIndex !== -1 ? window.employees[empIndex] : {
-                    No: window.employees.length + 1,
-                    Name: nameVal || 'New Trainee',
-                    NRC: nrcVal ? nrcVal.trim() : '',
-                    Position: colPos !== -1 ? vals[colPos] : '',
-                    Department: colDept !== -1 ? vals[colDept] : 'Vocational Training',
-                    InternalExternal: 'Internal',
-                    Region: colRegion !== -1 ? vals[colRegion] : '',
-                    BranchName: colBranch !== -1 ? vals[colBranch] : '',
-                    PhoneNumber: phoneVal ? phoneVal.trim() : '',
-                    sales: {}, development: {}, agency: {}, vocational: {}, ycp: {}, licensingAtt: {}, licensing: {}
-                };
+                // update profile fields when the file has a value
+                if (get(vals, colPos)) empObj.Position = get(vals, colPos);
+                if (get(vals, colDept)) empObj.Department = get(vals, colDept);
+                if (get(vals, colIE)) empObj.InternalExternal = get(vals, colIE);
+                if (get(vals, colRegion)) empObj.Region = get(vals, colRegion);
+                if (get(vals, colBranch)) empObj.BranchName = get(vals, colBranch);
+                if (get(vals, colPhone)) empObj.PhoneNumber = get(vals, colPhone);
 
-                if (colPos !== -1 && vals[colPos]) empObj.Position = vals[colPos];
-                if (colDept !== -1 && vals[colDept]) empObj.Department = vals[colDept];
-                if (colRegion !== -1 && vals[colRegion]) empObj.Region = vals[colRegion];
-                if (colBranch !== -1 && vals[colBranch]) empObj.BranchName = vals[colBranch];
-                if (phoneVal) empObj.PhoneNumber = phoneVal.trim();
+                const dateVal = normalizeDateText(get(vals, colTime));
+                const typesList = get(vals, colType).split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+                const modulesList = (get(vals, colModule) || 'DAY 1').split(',').map(m => m.trim()).filter(Boolean);
 
-                let rawTime = colTime !== -1 ? vals[colTime] : new Date().toISOString().split('T')[0];
-                let formattedDate = rawTime.split(' ')[0];
-
-                let rawTypes = colType !== -1 ? vals[colType] : '';
-                let typesList = rawTypes.split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
-                if (typesList.length === 0) typesList = ['vocational'];
-
-                let rawModules = colModule !== -1 ? vals[colModule] : 'DAY 1';
-                let modulesList = rawModules.split(',').map(m => m.trim()).filter(m => m.length > 0);
-
-                typesList.forEach(trainType => {
-                    modulesList.forEach(rawModName => {
-                        if (trainType.includes('sales') || trainType.includes('product')) {
-                            if (!empObj.sales[rawModName]) empObj.sales[rawModName] = [];
-                            if (!empObj.sales[rawModName].includes(formattedDate)) { empObj.sales[rawModName].push(formattedDate); empObj.sales[rawModName].sort(); }
-                        } else if (trainType.includes('dev')) {
-                            if (!empObj.development[rawModName]) empObj.development[rawModName] = [];
-                            if (!empObj.development[rawModName].includes(formattedDate)) { empObj.development[rawModName].push(formattedDate); empObj.development[rawModName].sort(); }
-                        } else if (trainType.includes('agency')) {
-                            if (!empObj.agency[rawModName]) empObj.agency[rawModName] = [];
-                            if (!empObj.agency[rawModName].includes(formattedDate)) { empObj.agency[rawModName].push(formattedDate); empObj.agency[rawModName].sort(); }
-                        } else if (trainType.includes('vocat')) {
-                            if (!empObj.vocational[rawModName]) empObj.vocational[rawModName] = [];
-                            if (!empObj.vocational[rawModName].includes(formattedDate)) { empObj.vocational[rawModName].push(formattedDate); empObj.vocational[rawModName].sort(); }
-                        } else if (trainType.includes('ycp') || trainType.includes('ambassador')) {
-                            if (!empObj.ycp[rawModName]) empObj.ycp[rawModName] = [];
-                            if (!empObj.ycp[rawModName].includes(formattedDate)) { empObj.ycp[rawModName].push(formattedDate); empObj.ycp[rawModName].sort(); }
-                        } else if (trainType.includes('licens')) {
-                            if (!empObj.licensingAtt[rawModName]) empObj.licensingAtt[rawModName] = [];
-                            if (!empObj.licensingAtt[rawModName].includes(formattedDate)) { empObj.licensingAtt[rawModName].push(formattedDate); empObj.licensingAtt[rawModName].sort(); }
-                        }
+                modulesList.forEach(rawMod => {
+                    let cats = typesList.map(catFromType).filter(Boolean);
+                    if (cats.length === 0) cats = [catFromModule(rawMod) || 'vocational'];
+                    [...new Set(cats)].forEach(catKey => {
+                        const mod = canonicalModule(catKey, rawMod);
+                        if (!empObj[catKey]) empObj[catKey] = {};
+                        if (!empObj[catKey][mod]) empObj[catKey][mod] = [];
+                        if (empObj[catKey][mod].includes(dateVal)) { alreadyRecorded++; return; }
+                        empObj[catKey][mod].push(dateVal);
+                        empObj[catKey][mod].sort();
+                        newAttendance++;
                     });
                 });
-
-                if (empIndex !== -1) { window.employees[empIndex] = empObj; } else { window.employees.push(empObj); }
-                updatedCount++;
             }
+
+            // Make imported departments / branches / regions selectable in the filters
+            const addOpt = (type, v) => {
+                v = String(v || '').trim();
+                if (!v) return;
+                if (!window.dropdownOptions[type]) window.dropdownOptions[type] = [];
+                if (!window.dropdownOptions[type].some(x => x.toLowerCase() === v.toLowerCase())) window.dropdownOptions[type].push(v);
+            };
+            touched.forEach(emp => { addOpt('departments', emp.Department); addOpt('branches', emp.BranchName); addOpt('regions', emp.Region); });
 
             recalculateAllEmployeeIDs();
             populateDropdowns();
             renderTable();
-            alert(`QR Code Import Complete! Successfully synced ${updatedCount} records.`);
+
+            let msg = `Import complete!\n\n` +
+                `New people: ${newPeople}\n` +
+                `Existing people updated: ${updatedPeople}\n` +
+                `New attendance records added: ${newAttendance}\n` +
+                `Already recorded (same person, module and date - skipped): ${alreadyRecorded}`;
+            if (sameNrcDifferentName) msg += `\n\nNote: ${sameNrcDifferentName} row(s) have an NRC that already exists under a different name. They were added as new people; use "Audit Typos" to review and combine them.`;
+
+            if (supabaseClient) {
+                const ok = await syncNow();
+                msg += ok ? `\n\nSaved to Supabase cloud.` : `\n\nWARNING: saving to Supabase failed. Data is kept in this browser only.`;
+            } else {
+                msg += `\n\nOffline mode: saved in this browser only.`;
+            }
+            alert(msg);
         }
 
         window.exportToExcel = function() {
@@ -1020,38 +1309,45 @@
             if (recordCount) recordCount.innerText = `Showing ${filtered.length} records`;
 
             if (window.currentTab === 'summary') {
-                let topRow = `<tr>
-                    <th colspan="6" class="px-3 py-2 bg-blue-800 text-white text-center border-r border-blue-700">Identification</th>
-                    <th colspan="${window.salesModules.length}" class="px-3 py-2 bg-emerald-800 text-white text-center border-r">Sales</th>
-                    <th colspan="${window.developmentModules.length}" class="px-3 py-2 bg-indigo-800 text-white text-center border-r">Development</th>
-                    <th colspan="10" class="px-3 py-2 bg-purple-800 text-white text-center">Licensing</th>
-                </tr>`;
+                const groups = window.categoryConfig.map(g => ({ ...g, modules: getModulesFor(g.key, g.base()) }));
+                let topRow = `<tr><th colspan="6" class="px-3 py-2 bg-blue-800 text-white text-center border-r border-blue-700">Identification</th>`;
                 let subRow = `<tr><th class="px-3 py-2 bg-gray-100">ID Code</th><th class="px-3 py-2">Name</th><th class="px-3 py-2">Department</th><th class="px-3 py-2">Branch</th><th class="px-3 py-2">NRC</th><th class="px-3 py-2 border-r">Phone</th>`;
-                window.salesModules.forEach(m => subRow += `<th class="px-2 py-2 text-[10px] bg-emerald-50">${m}</th>`);
-                window.developmentModules.forEach(m => subRow += `<th class="px-2 py-2 text-[10px] bg-indigo-50">${m}</th>`);
-                subRow += `<th class="px-2 py-2 text-[10px] bg-purple-50">Batch</th><th class="px-2 py-2 text-[10px] bg-purple-50">Day 1</th><th class="px-2 py-2 text-[10px] bg-purple-50">Day 2</th><th class="px-2 py-2 text-[10px] bg-purple-50">Day 3</th><th class="px-2 py-2 text-[10px] bg-purple-50">Day 4</th><th class="px-2 py-2 text-[10px] bg-purple-50">Revision</th><th class="px-2 py-2 text-[10px] bg-purple-100">Completion</th><th class="px-2 py-2 text-[10px] bg-purple-50">Pre Status</th><th class="px-2 py-2 text-[10px] bg-purple-50">Pre Mark</th><th class="px-2 py-2 text-[10px] bg-purple-50">NIIM Status</th><th class="px-2 py-2 text-[10px] bg-purple-50">NIIM Mark</th></tr>`;
+                groups.forEach(g => {
+                    const isLic = g.key === 'licensingAtt';
+                    const span = g.modules.length + (isLic ? 6 : 1);
+                    topRow += `<th colspan="${span}" class="px-3 py-2 ${g.head} text-white text-center border-r">${g.label}</th>`;
+                    if (isLic) subRow += `<th class="px-2 py-2 text-[10px] ${g.sub}">Batch</th>`;
+                    g.modules.forEach(m => subRow += `<th class="px-2 py-2 text-[10px] ${g.sub}">${m}</th>`);
+                    if (isLic) {
+                        subRow += `<th class="px-2 py-2 text-[10px] bg-purple-100">Completion</th><th class="px-2 py-2 text-[10px] ${g.sub}">Pre Status</th><th class="px-2 py-2 text-[10px] ${g.sub}">Pre Mark</th><th class="px-2 py-2 text-[10px] ${g.sub}">NIIM Status</th><th class="px-2 py-2 text-[10px] ${g.sub} border-r">NIIM Mark</th>`;
+                    } else {
+                        subRow += `<th class="px-2 py-2 text-[10px] ${g.sub} font-bold border-r">Total</th>`;
+                    }
+                });
+                topRow += `</tr>`; subRow += `</tr>`;
                 thead.innerHTML = topRow + subRow;
 
                 tbody.innerHTML = filtered.map(emp => {
+                    const idx = window.employees.indexOf(emp);
                     let r = `<td class="px-3 py-2.5 font-mono font-bold text-blue-700">${emp.EmpID || '-'}</td><td class="px-3 py-2.5 font-semibold">${emp.Name}</td><td class="px-3 py-2.5 text-xs">${emp.Department || '-'}</td><td class="px-3 py-2.5 text-xs">${emp.BranchName || '-'}</td><td class="px-3 py-2.5 font-mono text-xs">${emp.NRC}</td><td class="px-3 py-2.5 text-xs border-r">${emp.PhoneNumber || '-'}</td>`;
-                    window.salesModules.forEach(m => {
-                        const c = (emp.sales?.[m] || []).length;
-                        r += `<td class="px-2 py-2 text-center bg-emerald-50/20"><span onclick="openAttendanceModal(${window.employees.indexOf(emp)}, 'sales', '${m}')" class="cursor-pointer px-2 py-0.5 rounded text-xs font-bold ${c>0?'bg-emerald-100 text-emerald-800':'text-gray-400'}">${c}</span></td>`;
+                    groups.forEach(g => {
+                        const isLic = g.key === 'licensingAtt';
+                        if (isLic) r += `<td class="px-2 py-2 text-xs text-center">${emp.licensing?.Batch || '-'}</td>`;
+                        g.modules.forEach(m => {
+                            const c = (emp[g.key]?.[m] || []).length;
+                            r += `<td class="px-2 py-2 text-center"><span onclick="openAttendanceModal(${idx}, '${g.key}', '${jsAttr(m)}')" class="cursor-pointer px-2 py-0.5 rounded text-xs font-bold ${c > 0 ? g.chip : 'text-gray-400'}">${c}</span></td>`;
+                        });
+                        if (isLic) {
+                            r += `<td class="px-2 py-2 text-xs text-center bg-purple-100/40">${getLicensingCompletionBadge(emp)}</td>`;
+                            r += `<td class="px-2 py-2 text-xs text-center">${getStatusBadge(emp.licensing?.["Pre Test Status"])}</td>`;
+                            r += `<td class="px-2 py-2 text-xs text-center">${formatMark(emp.licensing?.["Pre Test Mark"], 55)}</td>`;
+                            r += `<td class="px-2 py-2 text-xs text-center">${getStatusBadge(emp.licensing?.["NIIM Exam Status"])}</td>`;
+                            r += `<td class="px-2 py-2 text-xs text-center border-r">${formatMark(emp.licensing?.["NIIM Exam Mark"], 45)}</td>`;
+                        } else {
+                            const t = getTotalCategoryCount(emp, g.key);
+                            r += `<td class="px-2 py-2 text-xs text-center font-bold border-r ${t > 0 ? '' : 'text-gray-400'}">${t}</td>`;
+                        }
                     });
-                    window.developmentModules.forEach(m => {
-                        const c = (emp.development?.[m] || []).length;
-                        r += `<td class="px-2 py-2 text-center bg-indigo-50/20"><span onclick="openAttendanceModal(${window.employees.indexOf(emp)}, 'development', '${m}')" class="cursor-pointer px-2 py-0.5 rounded text-xs font-bold ${c>0?'bg-indigo-100 text-indigo-800':'text-gray-400'}">${c}</span></td>`;
-                    });
-                    r += `<td class="px-2 py-2 text-xs text-center">${emp.licensing?.Batch || '-'}</td>`;
-                    window.licensingDays.forEach(d => {
-                        const c = (emp.licensingAtt?.[d] || []).length;
-                        r += `<td class="px-2 py-2 text-center"><span onclick="openAttendanceModal(${window.employees.indexOf(emp)}, 'licensingAtt', '${d}')" class="cursor-pointer px-2 py-0.5 rounded text-xs font-bold ${c>0?'bg-purple-100 text-purple-800':'text-gray-400'}">${c}</span></td>`;
-                    });
-                    r += `<td class="px-2 py-2 text-xs text-center bg-purple-100/40">${getLicensingCompletionBadge(emp)}</td>`;
-                    r += `<td class="px-2 py-2 text-xs text-center">${getStatusBadge(emp.licensing?.["Pre Test Status"])}</td>`;
-                    r += `<td class="px-2 py-2 text-xs text-center">${formatMark(emp.licensing?.["Pre Test Mark"], 55)}</td>`;
-                    r += `<td class="px-2 py-2 text-xs text-center">${getStatusBadge(emp.licensing?.["NIIM Exam Status"])}</td>`;
-                    r += `<td class="px-2 py-2 text-xs text-center">${formatMark(emp.licensing?.["NIIM Exam Mark"], 45)}</td>`;
                     return `<tr class="hover:bg-blue-50/50">${r}</tr>`;
                 }).join('');
             } else if (window.currentTab === 'identification') {
@@ -1092,6 +1388,7 @@
                 else if (window.currentTab === 'vocational') { activeModules = window.vocationalModules; catKey = 'vocational'; colHeaderBg = 'bg-teal-800'; }
                 else if (window.currentTab === 'ycp') { activeModules = window.ycpModules; catKey = 'ycp'; colHeaderBg = 'bg-amber-800'; }
                 else if (window.currentTab === 'licensing') { activeModules = window.licensingDays; catKey = 'licensingAtt'; colHeaderBg = 'bg-purple-800'; }
+                activeModules = getModulesFor(catKey, activeModules);
 
                 let topRow = `<tr>
                     <th colspan="6" class="px-3 py-2 bg-blue-800 text-white text-center border-r border-blue-700">Identification</th>
@@ -1106,7 +1403,7 @@
                     let r = `<td class="px-3 py-2.5 font-mono font-bold text-blue-700">${emp.EmpID || '-'}</td><td class="px-3 py-2.5 font-semibold">${emp.Name}</td><td class="px-3 py-2.5 text-xs">${emp.Department || '-'}</td><td class="px-3 py-2.5 text-xs">${emp.BranchName || '-'}</td><td class="px-3 py-2.5 font-mono text-xs">${emp.NRC}</td><td class="px-3 py-2.5 text-xs border-r">${emp.PhoneNumber || '-'}</td>`;
                     activeModules.forEach(m => {
                         const c = (emp[catKey]?.[m] || []).length;
-                        r += `<td class="px-2 py-2 text-center"><span onclick="openAttendanceModal(${window.employees.indexOf(emp)}, '${catKey}', '${m}')" class="cursor-pointer px-2 py-0.5 rounded text-xs font-bold ${c>0?'bg-blue-100 text-blue-800':'text-gray-400'}">${c}</span></td>`;
+                        r += `<td class="px-2 py-2 text-center"><span onclick="openAttendanceModal(${window.employees.indexOf(emp)}, '${catKey}', '${jsAttr(m)}')" class="cursor-pointer px-2 py-0.5 rounded text-xs font-bold ${c>0?'bg-blue-100 text-blue-800':'text-gray-400'}">${c}</span></td>`;
                     });
                     return `<tr class="hover:bg-blue-50/50">${r}</tr>`;
                 }).join('');

@@ -42,3 +42,11 @@ create policy "anon full access" on public.app_settings
 -- Newer Supabase projects may not expose new tables to the API automatically
 grant usage on schema public to anon;
 grant select, insert, update, delete on public.trainings, public.app_settings to anon;
+
+-- Realtime: push changes to every open dashboard (safe to run more than once)
+do $$ begin
+  alter publication supabase_realtime add table public.trainings;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.app_settings;
+exception when duplicate_object then null; end $$;
