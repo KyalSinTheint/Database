@@ -17,10 +17,24 @@ alter table public.trainings add column if not exists position          int defa
 alter table public.trainings add column if not exists data_json         jsonb;
 alter table public.trainings add column if not exists updated_at        timestamptz default now();
 
--- Remove duplicate emp_id rows (older code could insert duplicates), then enforce uniqueness
+-- Allow deletes while cleaning up, even if the table is already in the Realtime publication
+alter table public.trainings replica identity full;
+
+-- Remove rows without an ID and duplicate emp_id rows (older code could insert duplicates)
+delete from public.trainings where emp_id is null;
 delete from public.trainings a using public.trainings b
   where a.emp_id = b.emp_id and a.ctid < b.ctid;
+alter table public.trainings alter column emp_id set not null;
 create unique index if not exists trainings_emp_id_key on public.trainings (emp_id);
+
+-- Give the table a primary key if it has none (Realtime needs one to publish deletes)
+do $$ begin
+  if not exists (select 1 from pg_constraint
+                 where conrelid = 'public.trainings'::regclass and contype = 'p') then
+    alter table public.trainings add constraint trainings_emp_id_key primary key using index trainings_emp_id_key;
+  end if;
+end $$;
+alter table public.trainings replica identity default;
 
 create table if not exists public.app_settings (
   key   text primary key,
@@ -50,3 +64,45 @@ exception when duplicate_object then null; end $$;
 do $$ begin
   alter publication supabase_realtime add table public.app_settings;
 exception when duplicate_object then null; end $$;
+
+-- ------------------------------------------------------------------
+-- Readable tables for Supabase Table Editor (built automatically from
+-- the app data; nothing extra to sync).
+--   training_attendance : one row per person / module / attendance date
+--   training_summary    : one row per person / module with times attended
+-- ------------------------------------------------------------------
+create or replace view public.training_attendance
+with (security_invoker = true) as
+select
+  t.emp_id,
+  t.name,
+  t.nrc,
+  t.department,
+  t.branch_name,
+  case c.key
+    when 'sales'        then 'Sales (P&S)'
+    when 'development'  then 'Development'
+    when 'agency'       then 'Agency'
+    when 'vocational'   then 'Vocational'
+    when 'ycp'          then 'YCP'
+    when 'licensingAtt' then 'Licensing'
+  end              as category,
+  m.key            as module,
+  d.value          as attendance_date
+from public.trainings t
+cross join lateral jsonb_each(case when jsonb_typeof(t.data_json) = 'object' then t.data_json else '{}'::jsonb end) c
+cross join lateral jsonb_each(case when jsonb_typeof(c.value) = 'object' then c.value else '{}'::jsonb end) m
+cross join lateral jsonb_array_elements_text(case when jsonb_typeof(m.value) = 'array' then m.value else '[]'::jsonb end) d
+where c.key in ('sales', 'development', 'agency', 'vocational', 'ycp', 'licensingAtt');
+
+create or replace view public.training_summary
+with (security_invoker = true) as
+select
+  emp_id, name, nrc, department, branch_name, category, module,
+  count(*)             as times_attended,
+  min(attendance_date) as first_date,
+  max(attendance_date) as last_date
+from public.training_attendance
+group by emp_id, name, nrc, department, branch_name, category, module;
+
+grant select on public.training_attendance, public.training_summary to anon;
