@@ -10,12 +10,13 @@
     <meta name="theme-color" content="#1e3a8a">
     <!-- Link preview (Viber, Messenger, Telegram, Facebook ...). og:image must be a full https:// URL -->
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Training Record Database | KBZ LIFE Insurance">
+    <meta property="og:title" content="Training Record Database Portal | KBZ LIFE Insurance">
     <meta property="og:description" content="Training attendance, licensing results, certificates and transcripts.">
     <meta property="og:image" content="assets/og-image.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="assets/og-image.png">
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
@@ -371,7 +372,7 @@
 
             <div id="printableAgentCert" class="printable-cert-container">
                 <div class="agent-cert border shadow">
-                    <img class="ac-bg" src="assets/agent-cert-template.jpg" alt="">
+                    <img class="ac-bg" data-src="assets/agent-cert-template.jpg" alt="">
                     <div class="ac-name" id="agentCertNameDisplay"></div>
                     <div class="ac-dates" id="agentCertDatesDisplay"></div>
                     <div class="ac-sign"><img id="agentCertSignImg" alt=""></div>
@@ -447,7 +448,7 @@
             <div id="printableTranscriptCert" class="printable-cert-container border shadow">
                 <div class="transcript-sheet">
                     <div class="tr-head">
-                        <img src="assets/kbz-logo.png" alt="KBZ LIFE Insurance" style="height:46px">
+                        <img class="tr-logo" data-src="assets/kbz-logo.png" alt="KBZ LIFE Insurance" style="height:46px">
                         <div class="tr-title">
                             <h2>TRAINING TRANSCRIPT</h2>
                             <p>KBZ LIFE Insurance In-House Agent Training Center</p>
@@ -1927,6 +1928,11 @@
             return attendedDays >= 3 ? '<span class="px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-800">YES</span>' : '<span class="px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-800">NO</span>';
         }
 
+        // Images inside certificates load on first open (keeps them out of link previews)
+        function loadLazyImages(scope) {
+            document.querySelectorAll(scope + ' img[data-src]').forEach(img => { if (!img.getAttribute('src')) img.src = img.dataset.src; });
+        }
+
         // ---------------- Agent certificate ----------------
         const DEFAULT_SIGNATURE_SRC = 'assets/signature-default.png';
         const DEFAULT_CERT_SIGNER = { name: 'Kyaw Ko Khaing', title: 'Principal', company: 'KBZ LIFE Insurance Co., Ltd', signature: '' };
@@ -1985,6 +1991,7 @@
             const emp = window.employees[idx];
             if (!emp) return;
             window.activeCertEmpIndex = idx;
+            loadLazyImages('#agentCertModal');
             document.getElementById('agentCertNameInput').value = emp.Name || '';
             const [from, to] = defaultCertPeriod(emp);
             document.getElementById('agentCertFrom').value = from;
@@ -2148,6 +2155,7 @@
             const emp = window.employees[idx];
             if (!emp) return;
             window.activeTranscriptEmpIndex = idx;
+            loadLazyImages('#transcriptCertModal');
             document.getElementById('trNameInput').value = emp.Name || '';
             document.getElementById('trFrom').value = '';
             document.getElementById('trTo').value = '';
