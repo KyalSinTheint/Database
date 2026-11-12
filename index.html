@@ -462,7 +462,7 @@
             if (SUPABASE_URL !== 'YOUR_SUPABASE_PROJECT_URL') {
                 supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             }
-        } catch(e) { console.log("Supabase offline mode"); }
+        } catch(e) { console.log("Supabase offline mode"); window.cloudError = 'Supabase library failed to load (' + e.message + ')'; }
 
         window.portalMode = 'admin';
         window.salesModules = ["Orientation", "Introduction to Life Insurance", "UL", "2 Year", "RDF", "GL", "PA", "CI", "HL", "Travel", "Credit", "Mortgage Loan", "Product Refresh", "All in One", "SDT", "I Medical", "Cashless Claim", "One Smart Plan", "Customer Service", "Sales", "Underwriting", "Claim Process", "Relationship with Bank"];
@@ -510,6 +510,19 @@
         }
 
         function jsAttr(v) { return String(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+        // Red banner that stays visible (alerts can be blocked, e.g. inside Google Sites)
+        function showCloudBanner(msg) {
+            let el = document.getElementById('cloudBanner');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'cloudBanner';
+                el.className = 'bg-red-600 text-white text-sm px-4 py-2 text-center font-semibold';
+                document.body.insertBefore(el, document.body.firstChild);
+            }
+            el.textContent = msg;
+            el.style.display = msg ? 'block' : 'none';
+        }
 
         function setSyncStatus(state, detail) {
             const el = document.getElementById('syncStatus');
@@ -693,7 +706,8 @@
                 if (res.error) {
                     // Never sync after a failed load, or an empty page could wipe the cloud data
                     console.error('Supabase load failed:', res.error.message);
-                    alert('Could not load data from the cloud (' + res.error.message + '). Working offline; changes will NOT be synced.');
+                    window.cloudError = 'Could not load data from Supabase: ' + res.error.message;
+                    alert(window.cloudError + '. Working offline; changes will NOT be synced.');
                     supabaseClient = null;
                 } else {
                     rememberCloud(res.rows, res.opts);
@@ -708,7 +722,11 @@
                     }
                 }
             }
-            if (!supabaseClient) setSyncStatus('offline');
+            if (!supabaseClient) {
+                setSyncStatus('offline');
+                showCloudBanner('NOT connected to cloud: ' + (window.cloudError || 'Supabase is not configured') +
+                    '. Data is saved in this browser only and may be lost on refresh.');
+            }
             // Cloud is empty (or offline): start from this browser's saved copy; it is uploaded on the first sync
             const savedEmp = localStorage.getItem('kbz_training_employees');
             if (savedEmp) { try { window.employees = JSON.parse(savedEmp); } catch(e) {} }
@@ -776,10 +794,12 @@
                     lastOptsSig = optSig;
                 }
                 setSyncStatus(window.realtimeLive ? 'live' : 'saved');
+                showCloudBanner('');
             } catch (error) {
                 ok = false;
                 console.error('Cloud save failed:', error);
                 setSyncStatus('error', error.message);
+                showCloudBanner('Cloud save failed: ' + error.message + '. Your latest changes are NOT in Supabase.');
                 alert('Cloud save failed: ' + error.message);
             } finally {
                 syncing = false;
@@ -1566,6 +1586,15 @@
             dl.setAttribute("download", "training_database_backup.json");
             document.body.appendChild(dl); dl.click(); dl.remove();
         };
+
+        // Warn before leaving while a cloud save is still pending
+        window.addEventListener('beforeunload', function(e) {
+            if (supabaseClient && (syncPending || syncing)) {
+                syncToSupabase();
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
 
         document.addEventListener("DOMContentLoaded", function() {
             loadData();
