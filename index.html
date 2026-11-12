@@ -1451,14 +1451,88 @@
             alert(msg);
         }
 
+        // Excel export: same data as the screen (current search / department / branch filters)
+        function isLicensingComplete(emp) {
+            const att = emp.licensingAtt || {};
+            return ["Day 1", "Day 2", "Day 3", "Day 4"].filter(d => (att[d] || []).length > 0).length >= 3;
+        }
+
         window.exportToExcel = function() {
-            if (typeof XLSX === 'undefined') { alert("Excel module loading..."); return; }
-            const exportData = window.employees.map(emp => ({
-                "ID Code": emp.EmpID, "Name": emp.Name, "NRC": emp.NRC, "Department": emp.Department, "Type": emp.InternalExternal, "Branch": emp.BranchName
-            }));
-            const ws = XLSX.utils.json_to_sheet(exportData);
+            if (typeof XLSX === 'undefined') { alert("Excel module is still loading. Please try again in a moment."); return; }
+            const list = getFilteredEmployees();
+            if (list.length === 0) { alert("No records to export (check the search and filters)."); return; }
+
+            const groups = window.categoryConfig.map(g => ({ ...g, modules: getModulesFor(g.key, g.base()) }));
+            const count = (emp, cat, m) => ((emp[cat] || {})[m] || []).length;
+            const L = emp => emp.licensing || {};
+            const idCols = emp => ({
+                "ID Code": emp.EmpID || '', "Name": emp.Name || '', "NRC": emp.NRC || '',
+                "Position": emp.Position || '', "Department": emp.Department || '', "Type": emp.InternalExternal || '',
+                "Region": emp.Region || '', "Branch": emp.BranchName || '', "Phone": emp.PhoneNumber || ''
+            });
+            const licCols = (emp, withDays) => {
+                const o = { "Batch": L(emp).Batch || '' };
+                if (withDays) window.licensingDays.forEach(d => o[d] = count(emp, 'licensingAtt', d));
+                Object.assign(o, {
+                    "Completion": isLicensingComplete(emp) ? 'YES' : 'NO',
+                    "Pre Test Mark": L(emp)["Pre Test Mark"] || '', "Pre Test Status": L(emp)["Pre Test Status"] || '',
+                    "NIIM Mark": L(emp)["NIIM Exam Mark"] || '', "NIIM Status": L(emp)["NIIM Exam Status"] || ''
+                });
+                return o;
+            };
+            const hasLicensing = emp => getTotalCategoryCount(emp, 'licensingAtt') > 0 || (L(emp).Batch && L(emp).Batch !== '-');
+
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Training Summary");
+            const addSheet = (name, rows) => {
+                if (rows.length === 0) return;
+                const ws = XLSX.utils.json_to_sheet(rows);
+                const keys = Object.keys(rows[0]);
+                ws['!cols'] = keys.map(k => ({ wch: Math.min(40, Math.max(k.length, ...rows.map(r => String(r[k] ?? '').length)) + 2) }));
+                ws['!autofilter'] = { ref: ws['!ref'] };
+                XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31));
+            };
+
+            // 1) Summary: every person, every category (same as the Summary tab)
+            addSheet('Summary', list.map(emp => {
+                const row = idCols(emp);
+                groups.forEach(g => {
+                    if (g.key === 'licensingAtt') {
+                        row['Licensing - Batch'] = L(emp).Batch || '';
+                        g.modules.forEach(m => row[`Licensing - ${m}`] = count(emp, g.key, m));
+                        const lc = licCols(emp, false);
+                        ['Completion', 'Pre Test Mark', 'Pre Test Status', 'NIIM Mark', 'NIIM Status'].forEach(k => row[`Licensing - ${k}`] = lc[k]);
+                    } else {
+                        g.modules.forEach(m => row[`${g.label} - ${m}`] = count(emp, g.key, m));
+                        row[`${g.label} - Total`] = getTotalCategoryCount(emp, g.key);
+                    }
+                });
+                return row;
+            }));
+
+            // 2) One sheet per category (same as each tab): people who attended that category
+            groups.forEach(g => {
+                const people = g.key === 'licensingAtt' ? list.filter(hasLicensing) : list.filter(e => getTotalCategoryCount(e, g.key) > 0);
+                addSheet(g.label.replace(/[\\\/?*\[\]:]/g, ''), people.map(emp => {
+                    const row = idCols(emp);
+                    if (g.key === 'licensingAtt') return Object.assign(row, licCols(emp, true));
+                    g.modules.forEach(m => row[m] = count(emp, g.key, m));
+                    row['Total'] = getTotalCategoryCount(emp, g.key);
+                    return row;
+                }));
+            });
+
+            // 3) Attendance log: one row per attendance date
+            const log = [];
+            list.forEach(emp => groups.forEach(g => Object.entries(emp[g.key] || {}).forEach(([m, dates]) => {
+                (Array.isArray(dates) ? dates : []).forEach(d => log.push({
+                    "ID Code": emp.EmpID || '', "Name": emp.Name || '', "NRC": emp.NRC || '',
+                    "Department": emp.Department || '', "Branch": emp.BranchName || '',
+                    "Category": g.label, "Module": m, "Date": d
+                }));
+            })));
+            log.sort((a, b) => String(a.Date).localeCompare(String(b.Date)) || a.Name.localeCompare(b.Name));
+            addSheet('Attendance Log', log);
+
             XLSX.writeFile(wb, `Training_Database_${new Date().toISOString().split('T')[0]}.xlsx`);
         };
 
