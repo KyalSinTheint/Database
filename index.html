@@ -432,6 +432,49 @@
     </div>
 
     <!-- ATTENDANCE DATE MANAGEMENT MODAL -->
+    <div id="licensingModal" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <div class="flex justify-between items-center mb-1">
+                <h3 class="text-base font-bold text-purple-800 flex items-center gap-2"><i class="fa-solid fa-award"></i> Licensing Results</h3>
+                <button type="button" onclick="closeLicensingModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold cursor-pointer">&times;</button>
+            </div>
+            <p class="text-xs text-gray-500 mb-4" id="licModalSubtitle"></p>
+            <div class="space-y-3 text-sm">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Batch</label>
+                    <input type="text" id="licBatch" class="w-full px-3 py-2 border rounded-lg" placeholder="e.g. Batch 12">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Pre Test Mark <span class="font-normal text-gray-400">(pass &ge; 55)</span></label>
+                        <input type="text" id="licPreMark" oninput="autoLicStatus('licPreMark','licPreStatus',55)" class="w-full px-3 py-2 border rounded-lg" placeholder="e.g. 60">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Pre Test Status</label>
+                        <select id="licPreStatus" class="w-full px-3 py-2 border rounded-lg bg-white">
+                            <option value="">-</option><option>Passed</option><option>Failed</option><option>Not Answered</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">NIIM Mark <span class="font-normal text-gray-400">(pass &ge; 45)</span></label>
+                        <input type="text" id="licNiimMark" oninput="autoLicStatus('licNiimMark','licNiimStatus',45)" class="w-full px-3 py-2 border rounded-lg" placeholder="e.g. 50">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">NIIM Status</label>
+                        <select id="licNiimStatus" class="w-full px-3 py-2 border rounded-lg bg-white">
+                            <option value="">-</option><option>Passed</option><option>Failed</option><option>Not Answered</option>
+                        </select>
+                    </div>
+                </div>
+                <p class="text-[11px] text-gray-500">Completion is automatic: YES when the person attended at least 3 of Day 1&ndash;4.</p>
+            </div>
+            <div class="pt-4 flex justify-end gap-2 border-t mt-4">
+                <button type="button" onclick="closeLicensingModal()" class="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded-lg text-xs font-medium cursor-pointer">Cancel</button>
+                <button type="button" onclick="saveLicensingModal()" class="bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer">Save</button>
+            </div>
+        </div>
+    </div>
+
     <div id="attendanceModal" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
             <h3 id="attModalTitle" class="text-base font-bold text-gray-800 mb-1">Manage Attendance</h3>
@@ -828,7 +871,7 @@
         }
 
         function anyEditModalOpen() {
-            return ['employeeModal', 'attendanceModal', 'duplicateAuditModal', 'settingsModal']
+            return ['employeeModal', 'attendanceModal', 'duplicateAuditModal', 'settingsModal', 'licensingModal']
                 .some(id => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); });
         }
 
@@ -1164,6 +1207,12 @@
             const colType = findCol(['training type', 'category', 'type'], ['internal', 'external']);
             const colTime = findCol(['attendance date', 'training date', 'date', 'timestamp', 'time']);
             const colModule = findCol(['training module', 'module name', 'module', 'session', 'course']);
+            const colBatch = findCol(['licensing batch', 'batch no', 'batch']);
+            const colPreMark = findCol(['pre test mark', 'pre-test mark', 'pretest mark', 'pre test score', 'pre-test score', 'pretest score'], ['status']);
+            const colPreStatus = findCol(['pre test status', 'pre-test status', 'pretest status', 'pre test result', 'pre-test result'], ['mark', 'score']);
+            const colNiimMark = findCol(['niim exam mark', 'niim mark', 'niim exam score', 'niim score'], ['status']);
+            const colNiimStatus = findCol(['niim exam status', 'niim status', 'niim exam result', 'niim result'], ['mark', 'score']);
+            const hasLicCols = [colBatch, colPreMark, colPreStatus, colNiimMark, colNiimStatus].some(c => c !== -1);
 
             if (colName === -1 && colNRC === -1) {
                 alert('Could not find a "Name" or "NRC" column in the first row of the file.');
@@ -1197,7 +1246,7 @@
             };
             const get = (vals, col) => (col !== -1 && vals[col] !== undefined) ? String(vals[col]).trim() : '';
 
-            let newPeople = 0, updatedPeople = 0, newAttendance = 0, alreadyRecorded = 0, sameNrcDifferentName = 0;
+            let newPeople = 0, updatedPeople = 0, newAttendance = 0, alreadyRecorded = 0, sameNrcDifferentName = 0, licUpdated = 0;
             const touched = new Set();
 
             for (let i = 1; i < rows.length; i++) {
@@ -1239,9 +1288,19 @@
                 if (get(vals, colBranch)) empObj.BranchName = get(vals, colBranch);
                 if (get(vals, colPhone)) empObj.PhoneNumber = get(vals, colPhone);
 
+                // Licensing results (Batch, Pre Test, NIIM)
+                const licFields = {
+                    batch: get(vals, colBatch), preMark: get(vals, colPreMark), preStatus: get(vals, colPreStatus),
+                    niimMark: get(vals, colNiimMark), niimStatus: get(vals, colNiimStatus)
+                };
+                const rowHasLic = Object.values(licFields).some(v => v !== '');
+                if (rowHasLic && applyLicensingFields(empObj, licFields)) licUpdated++;
+
                 const dateVal = normalizeDateText(get(vals, colTime));
                 const typesList = get(vals, colType).split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
-                const modulesList = (get(vals, colModule) || 'DAY 1').split(',').map(m => m.trim()).filter(Boolean);
+                // A results-only row (no module) must not create a fake attendance record
+                const rawModules = get(vals, colModule) || (rowHasLic || hasLicCols ? '' : 'DAY 1');
+                const modulesList = rawModules.split(',').map(m => m.trim()).filter(Boolean);
 
                 modulesList.forEach(rawMod => {
                     let cats = typesList.map(catFromType).filter(Boolean);
@@ -1275,7 +1334,8 @@
                 `New people: ${newPeople}\n` +
                 `Existing people updated: ${updatedPeople}\n` +
                 `New attendance records added: ${newAttendance}\n` +
-                `Already recorded (same person, module and date - skipped): ${alreadyRecorded}`;
+                `Already recorded (same person, module and date - skipped): ${alreadyRecorded}` +
+                (hasLicCols ? `\nLicensing results updated: ${licUpdated}` : '');
             if (sameNrcDifferentName) msg += `\n\nNote: ${sameNrcDifferentName} row(s) have an NRC that already exists under a different name. They were added as new people; use "Audit Typos" to review and combine them.`;
 
             if (supabaseClient) {
@@ -1301,8 +1361,82 @@
         function getStatusBadge(status) {
             if (!status || status === '-') return '<span class="text-gray-400">-</span>';
             if (status === 'Passed') return '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800">Passed</span>';
-            return '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">Failed</span>';
+            if (status === 'Failed') return '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">Failed</span>';
+            return `<span class="px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-600">${status}</span>`;
         }
+
+        // ---------------- Licensing results (Batch, Pre Test, NIIM) ----------------
+        const PRE_TEST_PASS = 55, NIIM_PASS = 45;
+
+        function markNumber(v) {
+            const n = parseFloat(String(v ?? '').replace(/\/\s*\d+\s*$/, '').trim());
+            return isNaN(n) ? null : n;
+        }
+        function statusFromMark(mark, cutoff) {
+            const n = markNumber(mark);
+            return n === null ? '' : (n >= cutoff ? 'Passed' : 'Failed');
+        }
+        function normalizeStatus(v) {
+            const s = String(v ?? '').trim(), l = s.toLowerCase();
+            if (!s || s === '-') return '';
+            if (l.startsWith('pass') || l === 'p' || l === 'yes') return 'Passed';
+            if (l.startsWith('fail') || l === 'f' || l === 'no') return 'Failed';
+            if (l.includes('not') || l.includes('absent')) return 'Not Answered';
+            return s;
+        }
+
+        // Set licensing fields; empty values are ignored. Status is derived from the mark when not given.
+        function applyLicensingFields(emp, f) {
+            if (!emp.licensing || typeof emp.licensing !== 'object') emp.licensing = {};
+            const L = emp.licensing;
+            let changed = false;
+            const set = (k, v) => { v = String(v ?? '').trim(); if (v !== '' && L[k] !== v) { L[k] = v; changed = true; } };
+            set('Batch', f.batch);
+            set('Pre Test Mark', f.preMark);
+            set('NIIM Exam Mark', f.niimMark);
+            set('Pre Test Status', normalizeStatus(f.preStatus) || (String(f.preMark ?? '').trim() ? statusFromMark(f.preMark, PRE_TEST_PASS) : ''));
+            set('NIIM Exam Status', normalizeStatus(f.niimStatus) || (String(f.niimMark ?? '').trim() ? statusFromMark(f.niimMark, NIIM_PASS) : ''));
+            return changed;
+        }
+
+        window.autoLicStatus = function(markId, statusId, cutoff) {
+            const st = statusFromMark(document.getElementById(markId).value, cutoff);
+            if (st) document.getElementById(statusId).value = st;
+        };
+
+        window.openLicensingModal = function(idx) {
+            if (window.portalMode !== 'admin') return;
+            const emp = window.employees[idx];
+            if (!emp) return;
+            window.activeLicEmpIndex = idx;
+            const L = emp.licensing || {};
+            document.getElementById('licModalSubtitle').innerText = `${emp.Name} (${emp.EmpID || '-'})`;
+            document.getElementById('licBatch').value = L.Batch && L.Batch !== '-' ? L.Batch : '';
+            document.getElementById('licPreMark').value = L['Pre Test Mark'] && L['Pre Test Mark'] !== '-' ? L['Pre Test Mark'] : '';
+            document.getElementById('licPreStatus').value = ['Passed', 'Failed', 'Not Answered'].includes(L['Pre Test Status']) ? L['Pre Test Status'] : '';
+            document.getElementById('licNiimMark').value = L['NIIM Exam Mark'] && L['NIIM Exam Mark'] !== '-' ? L['NIIM Exam Mark'] : '';
+            document.getElementById('licNiimStatus').value = ['Passed', 'Failed', 'Not Answered'].includes(L['NIIM Exam Status']) ? L['NIIM Exam Status'] : '';
+            document.getElementById('licensingModal').classList.remove('hidden');
+        };
+        window.closeLicensingModal = function() { document.getElementById('licensingModal').classList.add('hidden'); };
+
+        window.saveLicensingModal = function() {
+            const emp = window.employees[window.activeLicEmpIndex];
+            if (!emp || window.portalMode !== 'admin') return;
+            // The form is the full record: clearing a field removes it
+            const val = id => document.getElementById(id).value.trim();
+            emp.licensing = Object.assign({}, emp.licensing || {}, {
+                'Batch': val('licBatch'),
+                'Pre Test Mark': val('licPreMark'),
+                'Pre Test Status': val('licPreStatus'),
+                'NIIM Exam Mark': val('licNiimMark'),
+                'NIIM Exam Status': val('licNiimStatus')
+            });
+            Object.keys(emp.licensing).forEach(k => { if (emp.licensing[k] === '') delete emp.licensing[k]; });
+            closeLicensingModal();
+            saveData();
+            renderTable();
+        };
 
         function formatMark(val, cutoff) {
             if (!val || val === '-') return '<span class="text-gray-400">-</span>';
@@ -1410,21 +1544,40 @@
                 else if (window.currentTab === 'licensing') { activeModules = window.licensingDays; catKey = 'licensingAtt'; colHeaderBg = 'bg-purple-800'; }
                 activeModules = getModulesFor(catKey, activeModules);
 
+                const isLic = catKey === 'licensingAtt';
+                const canEdit = window.portalMode === 'admin';
                 let topRow = `<tr>
                     <th colspan="6" class="px-3 py-2 bg-blue-800 text-white text-center border-r border-blue-700">Identification</th>
-                    <th colspan="${activeModules.length}" class="px-3 py-2 ${colHeaderBg} text-white text-center capitalize">${window.currentTab} Modules</th>
+                    ${isLic ? `<th class="px-3 py-2 bg-purple-900 text-white text-center border-r">Batch</th>` : ''}
+                    <th colspan="${activeModules.length}" class="px-3 py-2 ${colHeaderBg} text-white text-center capitalize border-r">${isLic ? 'Licensing Attendance' : window.currentTab + ' Modules'}</th>
+                    ${isLic ? `<th colspan="${canEdit ? 6 : 5}" class="px-3 py-2 bg-purple-900 text-white text-center">Completion &amp; Exam Results</th>` : ''}
                 </tr>`;
                 let subRow = `<tr><th class="px-3 py-2 bg-gray-100">ID Code</th><th class="px-3 py-2">Name</th><th class="px-3 py-2">Department</th><th class="px-3 py-2">Branch</th><th class="px-3 py-2">NRC</th><th class="px-3 py-2 border-r">Phone</th>`;
+                if (isLic) subRow += `<th class="px-2 py-2 text-[10px] bg-purple-50 border-r">Batch</th>`;
                 activeModules.forEach(m => subRow += `<th class="px-2 py-2 text-[10px] bg-gray-50">${m}</th>`);
+                if (isLic) {
+                    subRow += `<th class="px-2 py-2 text-[10px] bg-purple-100 border-l">Completion</th><th class="px-2 py-2 text-[10px] bg-purple-50">Pre Test Mark</th><th class="px-2 py-2 text-[10px] bg-purple-50">Pre Test Status</th><th class="px-2 py-2 text-[10px] bg-purple-50">NIIM Mark</th><th class="px-2 py-2 text-[10px] bg-purple-50">NIIM Status</th>`;
+                    if (canEdit) subRow += `<th class="px-2 py-2 text-[10px] bg-purple-50">Results</th>`;
+                }
                 subRow += `</tr>`;
                 thead.innerHTML = topRow + subRow;
 
                 tbody.innerHTML = filtered.map(emp => {
+                    const idx = window.employees.indexOf(emp);
                     let r = `<td class="px-3 py-2.5 font-mono font-bold text-blue-700">${emp.EmpID || '-'}</td><td class="px-3 py-2.5 font-semibold">${emp.Name}</td><td class="px-3 py-2.5 text-xs">${emp.Department || '-'}</td><td class="px-3 py-2.5 text-xs">${emp.BranchName || '-'}</td><td class="px-3 py-2.5 font-mono text-xs">${emp.NRC}</td><td class="px-3 py-2.5 text-xs border-r">${emp.PhoneNumber || '-'}</td>`;
+                    if (isLic) r += `<td class="px-2 py-2 text-xs text-center font-semibold border-r">${emp.licensing?.Batch || '-'}</td>`;
                     activeModules.forEach(m => {
                         const c = (emp[catKey]?.[m] || []).length;
-                        r += `<td class="px-2 py-2 text-center"><span onclick="openAttendanceModal(${window.employees.indexOf(emp)}, '${catKey}', '${jsAttr(m)}')" class="cursor-pointer px-2 py-0.5 rounded text-xs font-bold ${c>0?'bg-blue-100 text-blue-800':'text-gray-400'}">${c}</span></td>`;
+                        r += `<td class="px-2 py-2 text-center"><span onclick="openAttendanceModal(${idx}, '${catKey}', '${jsAttr(m)}')" class="cursor-pointer px-2 py-0.5 rounded text-xs font-bold ${c>0?'bg-blue-100 text-blue-800':'text-gray-400'}">${c}</span></td>`;
                     });
+                    if (isLic) {
+                        r += `<td class="px-2 py-2 text-xs text-center bg-purple-100/40 border-l">${getLicensingCompletionBadge(emp)}</td>`;
+                        r += `<td class="px-2 py-2 text-xs text-center">${formatMark(emp.licensing?.["Pre Test Mark"], PRE_TEST_PASS)}</td>`;
+                        r += `<td class="px-2 py-2 text-xs text-center">${getStatusBadge(emp.licensing?.["Pre Test Status"])}</td>`;
+                        r += `<td class="px-2 py-2 text-xs text-center">${formatMark(emp.licensing?.["NIIM Exam Mark"], NIIM_PASS)}</td>`;
+                        r += `<td class="px-2 py-2 text-xs text-center">${getStatusBadge(emp.licensing?.["NIIM Exam Status"])}</td>`;
+                        if (canEdit) r += `<td class="px-2 py-2 text-center"><button type="button" onclick="openLicensingModal(${idx})" class="text-purple-700 bg-purple-50 hover:bg-purple-100 px-2 py-1 rounded text-xs font-semibold cursor-pointer">Edit</button></td>`;
+                    }
                     return `<tr class="hover:bg-blue-50/50">${r}</tr>`;
                 }).join('');
             }

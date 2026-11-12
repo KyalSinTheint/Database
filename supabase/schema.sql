@@ -106,3 +106,38 @@ from public.training_attendance
 group by emp_id, name, nrc, department, branch_name, category, module;
 
 grant select on public.training_attendance, public.training_summary to anon;
+
+-- One row per person with licensing batch, attendance, completion and exam results
+create or replace view public.training_licensing
+with (security_invoker = true) as
+select
+  t.emp_id,
+  t.name,
+  t.nrc,
+  t.department,
+  t.branch_name,
+  nullif(t.data_json -> 'licensing' ->> 'Batch', '')            as batch,
+  coalesce(jsonb_array_length(case when jsonb_typeof(t.data_json -> 'licensingAtt' -> 'Day 1') = 'array' then t.data_json -> 'licensingAtt' -> 'Day 1' end), 0) as day_1,
+  coalesce(jsonb_array_length(case when jsonb_typeof(t.data_json -> 'licensingAtt' -> 'Day 2') = 'array' then t.data_json -> 'licensingAtt' -> 'Day 2' end), 0) as day_2,
+  coalesce(jsonb_array_length(case when jsonb_typeof(t.data_json -> 'licensingAtt' -> 'Day 3') = 'array' then t.data_json -> 'licensingAtt' -> 'Day 3' end), 0) as day_3,
+  coalesce(jsonb_array_length(case when jsonb_typeof(t.data_json -> 'licensingAtt' -> 'Day 4') = 'array' then t.data_json -> 'licensingAtt' -> 'Day 4' end), 0) as day_4,
+  coalesce(jsonb_array_length(case when jsonb_typeof(t.data_json -> 'licensingAtt' -> 'Revision') = 'array' then t.data_json -> 'licensingAtt' -> 'Revision' end), 0) as revision,
+  case when (
+      (case when jsonb_array_length(case when jsonb_typeof(t.data_json -> 'licensingAtt' -> 'Day 1') = 'array' then t.data_json -> 'licensingAtt' -> 'Day 1' else '[]' end) > 0 then 1 else 0 end) +
+      (case when jsonb_array_length(case when jsonb_typeof(t.data_json -> 'licensingAtt' -> 'Day 2') = 'array' then t.data_json -> 'licensingAtt' -> 'Day 2' else '[]' end) > 0 then 1 else 0 end) +
+      (case when jsonb_array_length(case when jsonb_typeof(t.data_json -> 'licensingAtt' -> 'Day 3') = 'array' then t.data_json -> 'licensingAtt' -> 'Day 3' else '[]' end) > 0 then 1 else 0 end) +
+      (case when jsonb_array_length(case when jsonb_typeof(t.data_json -> 'licensingAtt' -> 'Day 4') = 'array' then t.data_json -> 'licensingAtt' -> 'Day 4' else '[]' end) > 0 then 1 else 0 end)
+    ) >= 3 then 'YES' else 'NO' end                             as completion,
+  nullif(t.data_json -> 'licensing' ->> 'Pre Test Mark', '')    as pre_test_mark,
+  nullif(t.data_json -> 'licensing' ->> 'Pre Test Status', '')  as pre_test_status,
+  nullif(t.data_json -> 'licensing' ->> 'NIIM Exam Mark', '')   as niim_mark,
+  nullif(t.data_json -> 'licensing' ->> 'NIIM Exam Status', '') as niim_status
+from public.trainings t
+where jsonb_typeof(t.data_json) = 'object'
+  and (    jsonb_typeof(t.data_json -> 'licensingAtt') = 'object' and t.data_json -> 'licensingAtt' <> '{}'::jsonb
+        or coalesce(t.data_json -> 'licensing' ->> 'Batch', '') not in ('', '-')
+        or coalesce(t.data_json -> 'licensing' ->> 'Pre Test Mark', '') <> ''
+        or coalesce(t.data_json -> 'licensing' ->> 'NIIM Exam Mark', '') <> ''
+        or coalesce(t.data_json -> 'licensing' ->> 'NIIM Exam Status', '') <> '');
+
+grant select on public.training_licensing to anon;
