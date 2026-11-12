@@ -50,13 +50,9 @@
 
             <!-- Role Switcher & Action Buttons -->
             <div class="flex flex-wrap items-center gap-2">
-                <div class="bg-blue-950 p-1 rounded-lg flex items-center border border-blue-800 text-xs mr-2">
-                    <span class="px-2 text-blue-300 font-semibold"><i class="fa-solid fa-eye mr-1"></i> View:</span>
-                    <button type="button" onclick="setPortalMode('admin')" id="modeBtnAdmin" class="px-2.5 py-1 rounded bg-blue-600 text-white font-bold transition cursor-pointer">Admin</button>
-                    <button type="button" onclick="setPortalMode('public')" id="modeBtnPublic" class="px-2.5 py-1 rounded text-blue-200 hover:text-white transition cursor-pointer">Public User</button>
-                </div>
+                <div id="authArea" class="flex items-center gap-2 mr-2"></div>
 
-                <div id="adminActionGroup" class="flex flex-wrap items-center gap-2">
+                <div id="adminActionGroup" class="hidden flex flex-wrap items-center gap-2">
                     <button type="button" onclick="triggerCSVImport()" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shadow" title="Upload Excel (.xlsx) or CSV attendance file">
                         <i class="fa-solid fa-file-import"></i> Import Excel / CSV
                     </button>
@@ -432,6 +428,28 @@
     </div>
 
     <!-- ATTENDANCE DATE MANAGEMENT MODAL -->
+    <div id="loginModal" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4">
+        <form onsubmit="submitLogin(event)" class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-base font-bold text-blue-900 flex items-center gap-2"><i class="fa-solid fa-user-shield"></i> Admin Login</h3>
+                <button type="button" onclick="closeLoginModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold cursor-pointer">&times;</button>
+            </div>
+            <div class="space-y-3 text-sm">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Email</label>
+                    <input type="email" id="loginEmail" required autocomplete="username" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Password</label>
+                    <input type="password" id="loginPassword" required autocomplete="current-password" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <p id="loginError" class="hidden text-xs text-red-600 font-semibold"></p>
+            </div>
+            <button type="submit" id="loginSubmitBtn" class="mt-5 w-full bg-blue-700 hover:bg-blue-600 text-white py-2 rounded-lg text-sm font-semibold cursor-pointer">Log in</button>
+            <p class="mt-3 text-[11px] text-gray-500 text-center">Viewers do not need to log in. Admin accounts are created by the system owner.</p>
+        </form>
+    </div>
+
     <div id="licensingModal" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
             <div class="flex justify-between items-center mb-1">
@@ -507,7 +525,8 @@
             }
         } catch(e) { console.log("Supabase offline mode"); window.cloudError = 'Supabase library failed to load (' + e.message + ')'; }
 
-        window.portalMode = 'admin';
+        window.portalMode = 'public';
+        window.authUser = null;
         window.salesModules = ["Orientation", "Introduction to Life Insurance", "UL", "2 Year", "RDF", "GL", "PA", "CI", "HL", "Travel", "Credit", "Mortgage Loan", "Product Refresh", "All in One", "SDT", "I Medical", "Cashless Claim", "One Smart Plan", "Customer Service", "Sales", "Underwriting", "Claim Process", "Relationship with Bank"];
         window.developmentModules = ["Personal Grooming", "Positive Attitude", "Financial Planning", "Basic Excel Day 1", "Basic Excel Day 2", "Basic Excel Day 3", "Basic Excel Day 4", "Basic Excel Day 5", "Advanced Excel Day 1", "Advanced Excel Day 2", "Advanced Excel Day 3", "Advanced Excel Day 4", "Basic English", "Presentation Skills", "Makeup", "Teamwork & Collaboration", "Communication"];
         window.agencyModules = ["Rebuild Customer Trust", "Handling No", "Coaching Agents", "How to Recruit New Agents", "Pitching Deck", "Fact Finding", "CRM Training", "Sales Closing", "Customer Service Training", "Common Q&A", "Simple Claim Process"];
@@ -591,22 +610,95 @@
             return JSON.stringify(v === undefined ? null : v);
         }
 
+        function escapeHtml(v) {
+            return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        // Admin tools are shown only to a logged-in user (or in offline mode, where nothing reaches the cloud)
         function setPortalMode(mode) {
             window.portalMode = mode;
-            const btnAdmin = document.getElementById('modeBtnAdmin');
-            const btnPublic = document.getElementById('modeBtnPublic');
             const adminGroup = document.getElementById('adminActionGroup');
-
-            if (mode === 'admin') {
-                btnAdmin.className = "px-2.5 py-1 rounded bg-blue-600 text-white font-bold transition cursor-pointer";
-                btnPublic.className = "px-2.5 py-1 rounded text-blue-200 hover:text-white transition cursor-pointer";
-                if (adminGroup) adminGroup.classList.remove('hidden');
-            } else {
-                btnPublic.className = "px-2.5 py-1 rounded bg-blue-600 text-white font-bold transition cursor-pointer";
-                btnAdmin.className = "px-2.5 py-1 rounded text-blue-200 hover:text-white transition cursor-pointer";
-                if (adminGroup) adminGroup.classList.add('hidden');
-            }
+            if (adminGroup) adminGroup.classList.toggle('hidden', mode !== 'admin');
+            renderAuthArea();
             renderTable();
+        }
+
+        function renderAuthArea() {
+            const el = document.getElementById('authArea');
+            if (!el) return;
+            if (!supabaseClient) {
+                el.innerHTML = `<span class="text-xs text-blue-200 bg-blue-950 px-2 py-1 rounded"><i class="fa-solid fa-plug-circle-xmark mr-1"></i>Offline</span>`;
+            } else if (window.authUser) {
+                el.innerHTML = `<span class="text-xs text-blue-100 bg-blue-950 border border-blue-800 px-2.5 py-1.5 rounded-lg"><i class="fa-solid fa-user-shield mr-1"></i>${escapeHtml(window.authUser.email)}</span>
+                    <button type="button" onclick="logout()" class="bg-blue-950 hover:bg-red-700 border border-blue-800 text-white px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer"><i class="fa-solid fa-right-from-bracket mr-1"></i>Log out</button>`;
+            } else {
+                el.innerHTML = `<button type="button" onclick="openLoginModal()" class="bg-blue-950 hover:bg-blue-800 border border-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"><i class="fa-solid fa-lock mr-1"></i>Admin Login</button>`;
+            }
+        }
+
+        window.openLoginModal = function() {
+            document.getElementById('loginError').classList.add('hidden');
+            document.getElementById('loginPassword').value = '';
+            document.getElementById('loginModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('loginEmail').focus(), 50);
+        };
+        window.closeLoginModal = function() { document.getElementById('loginModal').classList.add('hidden'); };
+
+        window.submitLogin = async function(event) {
+            event.preventDefault();
+            if (!supabaseClient) return;
+            const btn = document.getElementById('loginSubmitBtn');
+            const errEl = document.getElementById('loginError');
+            btn.disabled = true; btn.textContent = 'Logging in…';
+            errEl.classList.add('hidden');
+            const { error } = await supabaseClient.auth.signInWithPassword({
+                email: document.getElementById('loginEmail').value.trim(),
+                password: document.getElementById('loginPassword').value
+            });
+            btn.disabled = false; btn.textContent = 'Log in';
+            if (error) {
+                errEl.textContent = error.message === 'Invalid login credentials' ? 'Wrong email or password.' : error.message;
+                errEl.classList.remove('hidden');
+                return;
+            }
+            document.getElementById('loginPassword').value = '';
+            closeLoginModal();   // onAuthStateChange switches to admin mode and reloads the full data
+        };
+
+        window.logout = async function() {
+            if (syncPending || syncing) {
+                if (!confirm('Changes are still being saved. Log out anyway?')) return;
+            }
+            await supabaseClient.auth.signOut();
+        };
+
+        async function initAuth() {
+            if (!supabaseClient) { setPortalMode('admin'); await loadData(); return; }
+            const { data } = await supabaseClient.auth.getSession();
+            window.authUser = data && data.session ? data.session.user : null;
+            setPortalMode(window.authUser ? 'admin' : 'public');
+            await loadData();
+            supabaseClient.auth.onAuthStateChange((event, session) => {
+                const user = session ? session.user : null;
+                const sameUser = (user && user.id) === (window.authUser && window.authUser.id);
+                window.authUser = user;
+                if (sameUser) return;               // token refresh etc.
+                setTimeout(onAuthChanged, 0);       // do not call Supabase inside this callback
+            });
+        }
+
+        async function onAuthChanged() {
+            clearTimeout(syncTimer);
+            syncPending = false;
+            lastSyncedRows = {};
+            lastOptsSig = null;
+            if (!window.authUser) {
+                // Remove the full (unmasked) copy from this browser on logout
+                try { localStorage.removeItem('kbz_training_employees'); localStorage.removeItem('kbz_training_options'); } catch(e) {}
+            }
+            window.employees = [];
+            setPortalMode(window.authUser ? 'admin' : 'public');
+            await loadData();
         }
 
         function normalizeString(str) {
@@ -726,8 +818,10 @@
         }
 
         async function fetchCloud() {
+            // Viewers read a masked copy (NRC / phone hidden); only logged-in admins read the real table
+            const source = window.authUser ? 'trainings' : 'public_trainings';
             const { data, error } = await supabaseClient
-                .from('trainings')
+                .from(source)
                 .select('emp_id,name,nrc,department,branch_name,internal_external,position,data_json')
                 .order('position');
             if (error) return { error };
@@ -746,6 +840,13 @@
         async function loadData() {
             if (supabaseClient) {
                 const res = await fetchCloud();
+                if (res.error && !window.authUser) {
+                    console.error('Supabase load failed:', res.error.message);
+                    showCloudBanner('Could not load data from Supabase: ' + res.error.message);
+                    window.employees = [];
+                    renderTable();
+                    return;
+                }
                 if (res.error) {
                     // Never sync after a failed load, or an empty page could wipe the cloud data
                     console.error('Supabase load failed:', res.error.message);
@@ -755,12 +856,14 @@
                 } else {
                     rememberCloud(res.rows, res.opts);
                     subscribeRealtime();
-                    if (res.rows.length > 0) {
+                    showCloudBanner('');
+                    if (res.rows.length > 0 || !window.authUser) {
                         window.employees = res.rows.map(r => r.data_json).filter(Boolean);
                         if (res.opts) window.dropdownOptions = res.opts;
                         normalizeEmployeesData();
                         populateDropdowns();
                         renderTable();
+                        setSyncStatus(window.realtimeLive ? 'live' : 'saved', window.authUser ? '' : 'View only');
                         return;
                     }
                 }
@@ -781,6 +884,7 @@
         }
 
         function saveData() {
+            if (supabaseClient && !window.authUser) return;   // viewers are read-only
             try {
                 localStorage.setItem('kbz_training_employees', JSON.stringify(window.employees));
                 localStorage.setItem('kbz_training_options', JSON.stringify(window.dropdownOptions));
@@ -800,7 +904,7 @@
         }
 
         async function syncToSupabase() {
-            if (!supabaseClient) return true;
+            if (!supabaseClient || !window.authUser) return true;
             if (syncing) { syncAgain = true; return true; }
             syncing = true; syncPending = false;
             let ok = true;
@@ -860,7 +964,7 @@
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, scheduleRemoteReload)
                 .subscribe(status => {
                     window.realtimeLive = (status === 'SUBSCRIBED');
-                    setSyncStatus(window.realtimeLive ? 'live' : 'saved');
+                    setSyncStatus(window.realtimeLive ? 'live' : 'saved', window.authUser ? '' : 'View only');
                     if (status === 'SUBSCRIBED') scheduleRemoteReload();   // catch up on anything missed while reconnecting
                 });
         }
@@ -979,7 +1083,7 @@
                 });
                 if (emp.licensing && emp.licensing.Batch && emp.licensing.Batch !== '-') hasAttended = true;
                 if (hasAttended) {
-                    const identifier = (emp.NRC && String(emp.NRC).trim() !== '') ? normalizeString(emp.NRC) : String(emp.Name || '').trim().toLowerCase();
+                    const identifier = (emp.NRC && String(emp.NRC).trim() !== '' && !String(emp.NRC).includes('*')) ? normalizeString(emp.NRC) : (emp.EmpID || String(emp.Name || '').trim().toLowerCase());
                     if (identifier) uniqueSet.add(identifier);
                 }
             });
@@ -1742,7 +1846,7 @@
 
         // Warn before leaving while a cloud save is still pending
         window.addEventListener('beforeunload', function(e) {
-            if (supabaseClient && (syncPending || syncing)) {
+            if (supabaseClient && window.authUser && (syncPending || syncing)) {
                 syncToSupabase();
                 e.preventDefault();
                 e.returnValue = '';
@@ -1750,8 +1854,8 @@
         });
 
         document.addEventListener("DOMContentLoaded", function() {
-            loadData();
             populateDropdowns();
+            initAuth();
         });
     </script>
 </body>

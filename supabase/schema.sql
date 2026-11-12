@@ -1,4 +1,6 @@
 -- Run in Supabase: Dashboard -> SQL Editor -> paste ALL -> Run
+-- Then: Authentication -> Sign In / Providers -> turn OFF "Allow new users to sign up",
+--       Authentication -> Users -> Add user (with Auto Confirm) for each admin.
 -- Safe to run more than once, and safe if a "trainings" table already exists.
 
 create table if not exists public.trainings (
@@ -44,18 +46,29 @@ create table if not exists public.app_settings (
 alter table public.trainings    enable row level security;
 alter table public.app_settings enable row level security;
 
--- WARNING: these policies let ANYONE with the site URL read and edit all data.
--- Replace with "to authenticated" policies once a login is added.
-drop policy if exists "anon full access" on public.trainings;
-drop policy if exists "anon full access" on public.app_settings;
-create policy "anon full access" on public.trainings
-  for all to anon using (true) with check (true);
-create policy "anon full access" on public.app_settings
-  for all to anon using (true) with check (true);
+-- ------------------------------------------------------------------
+-- Security
+--   Viewers (not logged in, role "anon"): read only the masked view
+--     public_trainings and the app_settings table. No writes.
+--   Admins (logged in, role "authenticated"): full access.
+-- ------------------------------------------------------------------
+drop policy if exists "anon full access"      on public.trainings;
+drop policy if exists "anon full access"      on public.app_settings;
+drop policy if exists "admins full access"    on public.trainings;
+drop policy if exists "admins full access"    on public.app_settings;
+drop policy if exists "viewers read settings" on public.app_settings;
 
--- Newer Supabase projects may not expose new tables to the API automatically
-grant usage on schema public to anon;
-grant select, insert, update, delete on public.trainings, public.app_settings to anon;
+create policy "admins full access" on public.trainings
+  for all to authenticated using (true) with check (true);
+create policy "admins full access" on public.app_settings
+  for all to authenticated using (true) with check (true);
+create policy "viewers read settings" on public.app_settings
+  for select to anon using (true);
+
+revoke all on public.trainings, public.app_settings from anon;
+grant usage on schema public to anon, authenticated;
+grant select on public.app_settings to anon;
+grant select, insert, update, delete on public.trainings, public.app_settings to authenticated;
 
 -- Realtime: push changes to every open dashboard (safe to run more than once)
 do $$ begin
@@ -105,7 +118,8 @@ select
 from public.training_attendance
 group by emp_id, name, nrc, department, branch_name, category, module;
 
-grant select on public.training_attendance, public.training_summary to anon;
+revoke all on public.training_attendance, public.training_summary from anon;
+grant select on public.training_attendance, public.training_summary to authenticated;
 
 -- One row per person with licensing batch, attendance, completion and exam results
 create or replace view public.training_licensing
@@ -140,4 +154,64 @@ where jsonb_typeof(t.data_json) = 'object'
         or coalesce(t.data_json -> 'licensing' ->> 'NIIM Exam Mark', '') <> ''
         or coalesce(t.data_json -> 'licensing' ->> 'NIIM Exam Status', '') <> '');
 
-grant select on public.training_licensing to anon;
+revoke all on public.training_licensing from anon;
+grant select on public.training_licensing to authenticated;
+
+-- ------------------------------------------------------------------
+-- Masked copy for viewers: NRC and phone number are hidden.
+-- Runs with the owner's rights (no security_invoker) so viewers can read
+-- it without having access to the real table.
+-- ------------------------------------------------------------------
+create or replace function public.mask_nrc(v text) returns text
+language sql immutable as $$
+  select case
+    when v is null or btrim(v) = '' then v
+    when length(v) <= 5 then repeat('*', length(v))
+    else left(v, length(v) - 5) || '*****'
+  end
+$$;
+
+create or replace function public.mask_phone(v text) returns text
+language sql immutable as $$
+  select case
+    when v is null or btrim(v) = '' then v
+    when length(v) <= 3 then '***'
+    else repeat('*', length(v) - 3) || right(v, 3)
+  end
+$$;
+
+create or replace view public.public_trainings as
+select
+  t.emp_id,
+  t.name,
+  public.mask_nrc(t.nrc) as nrc,
+  t.department,
+  t.branch_name,
+  t.internal_external,
+  t.position,
+  case when jsonb_typeof(t.data_json) = 'object'
+       then t.data_json || jsonb_build_object(
+              'NRC',         public.mask_nrc(t.data_json ->> 'NRC'),
+              'PhoneNumber', public.mask_phone(t.data_json ->> 'PhoneNumber'))
+       else t.data_json
+  end as data_json
+from public.trainings t;
+
+revoke all on public.public_trainings from anon, authenticated;
+grant select on public.public_trainings to anon, authenticated;
+
+-- Viewers cannot receive Realtime events from the real table, so every change
+-- also updates app_settings 'last_change', which viewers can listen to.
+create or replace function public.touch_last_change() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.app_settings (key, value) values ('last_change', to_jsonb(now()))
+  on conflict (key) do update set value = excluded.value;
+  return null;
+end
+$$;
+
+drop trigger if exists trainings_touch_last_change on public.trainings;
+create trigger trainings_touch_last_change
+  after insert or update or delete on public.trainings
+  for each statement execute function public.touch_last_change();
