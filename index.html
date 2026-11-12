@@ -434,8 +434,8 @@
 
     <!-- SCRIPT LOGIC -->
     <script>
-        const SUPABASE_URL = 'https://ggqofrcemutsoujvjusd.supabase.co';
-        const SUPABASE_ANON_KEY = 'sb_publishable_HefjMmqmua7hPuUzR67sIQ_M1jsTBgy';
+        const SUPABASE_URL = 'https://idiyjhmpwbvqareeegvf.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_ulX1AWIgBOaX-Kg4-Klonw_3MEBRiGo';
         let supabaseClient = null;
         try {
             if (SUPABASE_URL !== 'YOUR_SUPABASE_PROJECT_URL') {
@@ -553,7 +553,6 @@
             return prefix;
         }
 
-        // SMART RE-INDEXING FUNCTION: Recalculates all IDs so gaps are closed and sequences shift instantly
         function recalculateAllEmployeeIDs() {
             const prefixCounters = {};
             window.employees.forEach(emp => {
@@ -602,9 +601,9 @@
                     return;
                 }
             }
-            const savedEmp = localStorage.getItem('training_employees');
+            const savedEmp = localStorage.getItem('kbz_training_employees');
             if (savedEmp) { try { window.employees = JSON.parse(savedEmp); } catch(e) {} }
-            const savedOpts = localStorage.getItem('training_options');
+            const savedOpts = localStorage.getItem('kbz_training_options');
             if (savedOpts) { try { window.dropdownOptions = JSON.parse(savedOpts); } catch(e) {} }
             normalizeEmployeesData();
             populateDropdowns();
@@ -613,8 +612,8 @@
 
         let syncTimer = null;
         async function saveData() {
-            localStorage.setItem('training_employees', JSON.stringify(window.employees));
-            localStorage.setItem('training_options', JSON.stringify(window.dropdownOptions));
+            localStorage.setItem('kbz_training_employees', JSON.stringify(window.employees));
+            localStorage.setItem('kbz_training_options', JSON.stringify(window.dropdownOptions));
             if (!supabaseClient) return;
             clearTimeout(syncTimer);
             syncTimer = setTimeout(syncToSupabase, 800);   // batch rapid edits into one sync
@@ -1081,6 +1080,35 @@
                             <td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">${actionsHtml}</td>
                         </tr>
                     `;
+                }).join('');
+            } else {
+                // Render separate module tabs (Sales, Development, Agency, Vocational, YCP, Licensing)
+                let activeModules = window.salesModules;
+                let catKey = 'sales';
+                let colHeaderBg = 'bg-emerald-800';
+
+                if (window.currentTab === 'development') { activeModules = window.developmentModules; catKey = 'development'; colHeaderBg = 'bg-indigo-800'; }
+                else if (window.currentTab === 'agency') { activeModules = window.agencyModules; catKey = 'agency'; colHeaderBg = 'bg-orange-800'; }
+                else if (window.currentTab === 'vocational') { activeModules = window.vocationalModules; catKey = 'vocational'; colHeaderBg = 'bg-teal-800'; }
+                else if (window.currentTab === 'ycp') { activeModules = window.ycpModules; catKey = 'ycp'; colHeaderBg = 'bg-amber-800'; }
+                else if (window.currentTab === 'licensing') { activeModules = window.licensingDays; catKey = 'licensingAtt'; colHeaderBg = 'bg-purple-800'; }
+
+                let topRow = `<tr>
+                    <th colspan="6" class="px-3 py-2 bg-blue-800 text-white text-center border-r border-blue-700">Identification</th>
+                    <th colspan="${activeModules.length}" class="px-3 py-2 ${colHeaderBg} text-white text-center capitalize">${window.currentTab} Modules</th>
+                </tr>`;
+                let subRow = `<tr><th class="px-3 py-2 bg-gray-100">ID Code</th><th class="px-3 py-2">Name</th><th class="px-3 py-2">Department</th><th class="px-3 py-2">Branch</th><th class="px-3 py-2">NRC</th><th class="px-3 py-2 border-r">Phone</th>`;
+                activeModules.forEach(m => subRow += `<th class="px-2 py-2 text-[10px] bg-gray-50">${m}</th>`);
+                subRow += `</tr>`;
+                thead.innerHTML = topRow + subRow;
+
+                tbody.innerHTML = filtered.map(emp => {
+                    let r = `<td class="px-3 py-2.5 font-mono font-bold text-blue-700">${emp.EmpID || '-'}</td><td class="px-3 py-2.5 font-semibold">${emp.Name}</td><td class="px-3 py-2.5 text-xs">${emp.Department || '-'}</td><td class="px-3 py-2.5 text-xs">${emp.BranchName || '-'}</td><td class="px-3 py-2.5 font-mono text-xs">${emp.NRC}</td><td class="px-3 py-2.5 text-xs border-r">${emp.PhoneNumber || '-'}</td>`;
+                    activeModules.forEach(m => {
+                        const c = (emp[catKey]?.[m] || []).length;
+                        r += `<td class="px-2 py-2 text-center"><span onclick="openAttendanceModal(${window.employees.indexOf(emp)}, '${catKey}', '${m}')" class="cursor-pointer px-2 py-0.5 rounded text-xs font-bold ${c>0?'bg-blue-100 text-blue-800':'text-gray-400'}">${c}</span></td>`;
+                    });
+                    return `<tr class="hover:bg-blue-50/50">${r}</tr>`;
                 }).join('');
             }
         };
