@@ -68,11 +68,10 @@
                     <button type="button" onclick="openAddEmployeeModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow transition cursor-pointer">
                         <i class="fa-solid fa-user-plus"></i> Add Employee
                     </button>
+                    <button type="button" onclick="exportToExcel()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3.5 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shadow">
+                        <i class="fa-solid fa-file-excel text-emerald-200"></i> Export Excel
+                    </button>
                 </div>
-
-                <button type="button" onclick="exportToExcel()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3.5 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shadow">
-                    <i class="fa-solid fa-file-excel text-emerald-200"></i> Export Excel
-                </button>
             </div>
         </div>
     </header>
@@ -1454,6 +1453,7 @@
         }
 
         window.exportToExcel = function() {
+            if (window.portalMode !== 'admin') return;   // admins only
             if (typeof XLSX === 'undefined') { alert("Excel module is still loading. Please try again in a moment."); return; }
             const list = getFilteredEmployees();
             if (list.length === 0) { alert("No records to export (check the search and filters)."); return; }
