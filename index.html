@@ -97,13 +97,12 @@
     <!-- Top Navigation Header -->
     <header class="bg-blue-900 text-white shadow-md">
         <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-            <div class="flex items-center space-x-3 select-none pointer-events-none">
-                <div class="bg-white rounded-lg px-3 py-1.5 shadow-sm flex items-center">
+            <div class="flex items-center select-none">
+                <h1 class="sr-only">Training Record Database Portal</h1>
+                <div class="relative bg-white rounded-lg px-3 py-1.5 shadow-sm flex items-center">
                     <img src="assets/kbz-logo.png" alt="KBZ LIFE Insurance" class="h-9 w-auto" style="height:36px;width:auto">
-                </div>
-                <div class="border-l border-blue-700 pl-3">
-                    <h1 class="text-xl font-bold tracking-tight">Training Record Database Portal</h1>
-                    <p class="text-xs text-blue-200" id="syncStatus">Connecting&hellip;</p>
+                    <!-- connection status: coloured dot, details on hover -->
+                    <span id="syncStatus" title="Connecting…" style="position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:999px;border:2px solid #fff;background:#9ca3af"></span>
                 </div>
             </div>
 
@@ -753,7 +752,10 @@
                 live:    '<span class="inline-block w-2 h-2 rounded-full bg-emerald-400 mr-1"></span>Live &bull; Cloud synced &bull; Supabase',
                 error:   '<span class="text-red-300 font-bold">Cloud save failed</span>'
             };
-            el.innerHTML = (labels[state] || state) + (detail ? ' &bull; ' + detail : '');
+            const text = (labels[state] || state) + (detail ? ' &bull; ' + detail : '');
+            const tmp = document.createElement('span'); tmp.innerHTML = text;
+            el.title = tmp.textContent.trim();
+            el.style.background = { live: '#34d399', saved: '#34d399', saving: '#f59e0b', offline: '#ef4444', error: '#ef4444' }[state] || '#9ca3af';
             if (state === 'live' || state === 'saved') window.lastGoodStatus = state;
         }
 
