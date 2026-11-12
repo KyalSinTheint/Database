@@ -73,9 +73,6 @@
                 <button type="button" onclick="exportToExcel()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3.5 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shadow">
                     <i class="fa-solid fa-file-excel text-emerald-200"></i> Export Excel
                 </button>
-                <button type="button" onclick="exportData()" class="bg-blue-700 hover:bg-blue-600 text-white px-3.5 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shadow" title="Backup JSON">
-                    <i class="fa-solid fa-download"></i> Backup
-                </button>
             </div>
         </div>
     </header>
@@ -1909,14 +1906,6 @@
 
         window.openSettingsModal = function() { document.getElementById('settingsModal').classList.remove('hidden'); };
         window.closeSettingsModal = function() { document.getElementById('settingsModal').classList.add('hidden'); };
-
-        window.exportData = function() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ employees: window.employees, dropdownOptions: window.dropdownOptions }, null, 2));
-            const dl = document.createElement('a');
-            dl.setAttribute("href", dataStr);
-            dl.setAttribute("download", "training_database_backup.json");
-            document.body.appendChild(dl); dl.click(); dl.remove();
-        };
 
         // Warn before leaving while a cloud save is still pending
         window.addEventListener('beforeunload', function(e) {
