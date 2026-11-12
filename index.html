@@ -763,6 +763,10 @@
             window.portalMode = mode;
             const adminGroup = document.getElementById('adminActionGroup');
             if (adminGroup) adminGroup.classList.toggle('hidden', mode !== 'admin');
+            if (mode !== 'admin') {
+                ['agentCertModal', 'transcriptCertModal', 'employeeModal', 'licensingModal', 'settingsModal', 'duplicateAuditModal']
+                    .forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+            }
             renderAuthArea();
             renderTable();
         }
@@ -1828,15 +1832,14 @@
                     return `<tr class="hover:bg-blue-50/50">${r}</tr>`;
                 }).join('');
             } else if (window.currentTab === 'identification') {
-                thead.innerHTML = `<tr><th class="px-4 py-3">ID Code</th><th class="px-4 py-3">Name</th><th class="px-4 py-3">Position</th><th class="px-4 py-3">Department</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Branch</th><th class="px-4 py-3">NRC</th><th class="px-4 py-3 text-center">Actions</th></tr>`;
+                thead.innerHTML = `<tr><th class="px-4 py-3">ID Code</th><th class="px-4 py-3">Name</th><th class="px-4 py-3">Position</th><th class="px-4 py-3">Department</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Branch</th><th class="px-4 py-3">NRC</th>${window.portalMode === 'admin' ? '<th class="px-4 py-3 text-center">Actions</th>' : ''}</tr>`;
                 tbody.innerHTML = filtered.map(emp => {
                     const idx = window.employees.indexOf(emp);
-                    let actionsHtml = `
-                        <button type="button" onclick="openAgentCertModal(${idx})" class="text-sky-700 bg-sky-50 px-2 py-1 rounded text-xs font-semibold cursor-pointer">Agent Cert</button>
-                        <button type="button" onclick="openTranscriptCertModal(${idx})" class="text-indigo-700 bg-indigo-50 px-2 py-1 rounded text-xs font-semibold cursor-pointer">Transcript</button>
-                    `;
+                    let actionsHtml = '';
                     if (window.portalMode === 'admin') {
-                        actionsHtml += `
+                        actionsHtml = `
+                            <button type="button" onclick="openAgentCertModal(${idx})" class="text-sky-700 bg-sky-50 px-2 py-1 rounded text-xs font-semibold cursor-pointer">Agent Cert</button>
+                            <button type="button" onclick="openTranscriptCertModal(${idx})" class="text-indigo-700 bg-indigo-50 px-2 py-1 rounded text-xs font-semibold cursor-pointer">Transcript</button>
                             <button type="button" onclick="openEditEmployeeModal(${idx})" class="text-blue-600 bg-blue-50 px-2 py-1 rounded text-xs font-semibold cursor-pointer">Edit</button>
                             <button type="button" onclick="deleteEmployee(${idx})" class="text-red-700 bg-red-100 px-2 py-1 rounded text-xs font-bold cursor-pointer">DEL</button>
                         `;
@@ -1850,7 +1853,7 @@
                             <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-xs bg-gray-100 font-medium">${emp.InternalExternal || 'Internal'}</span></td>
                             <td class="px-4 py-3">${emp.BranchName || '-'}</td>
                             <td class="px-4 py-3 font-mono text-xs">${emp.NRC}</td>
-                            <td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">${actionsHtml}</td>
+                            ${window.portalMode === 'admin' ? `<td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">${actionsHtml}</td>` : ''}
                         </tr>
                     `;
                 }).join('');
@@ -1966,6 +1969,7 @@
         };
 
         window.openAgentCertModal = function(idx) {
+            if (window.portalMode !== 'admin') return;   // admins only
             const emp = window.employees[idx];
             if (!emp) return;
             window.activeCertEmpIndex = idx;
@@ -2128,6 +2132,7 @@
         };
 
         window.openTranscriptCertModal = function(idx) {
+            if (window.portalMode !== 'admin') return;   // admins only
             const emp = window.employees[idx];
             if (!emp) return;
             window.activeTranscriptEmpIndex = idx;
