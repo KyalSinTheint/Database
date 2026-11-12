@@ -97,31 +97,31 @@
     <!-- Top Navigation Header -->
     <header class="bg-blue-900 text-white shadow-md">
         <!-- Left: logo + title | Center: admin tools | Right: account + log out -->
-        <div class="max-w-7xl mx-auto px-4 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div class="max-w-[1600px] mx-auto px-4 lg:px-6 py-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5">
             <div class="order-1 flex items-center gap-2.5 select-none shrink-0">
-                <div class="bg-white p-1 rounded-md shadow-sm">
-                    <img src="assets/kbz-icon.png" alt="KBZ LIFE Insurance" style="height:28px;width:28px;display:block">
+                <div class="bg-white p-1.5 rounded-lg shadow-sm">
+                    <img src="assets/kbz-icon.png" alt="KBZ LIFE Insurance" style="height:32px;width:32px;display:block">
                 </div>
-                <h1 class="text-base sm:text-lg font-bold tracking-tight whitespace-nowrap">Training Record Database Portal</h1>
+                <h1 class="text-lg sm:text-xl font-bold tracking-tight whitespace-nowrap">Training Record Database Portal</h1>
             </div>
 
             <div id="authArea" class="order-2 lg:order-3 ml-auto flex items-center gap-2 shrink-0"></div>
 
             <div id="adminActionGroup" class="hidden order-3 lg:order-2 w-full lg:w-auto lg:flex-1 flex flex-wrap items-center justify-center gap-2">
-                <button type="button" onclick="triggerCSVImport()" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap" title="Upload Excel (.xlsx) or CSV attendance file">
+                <button type="button" onclick="triggerCSVImport()" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-2 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap" title="Upload Excel (.xlsx) or CSV attendance file">
                     <i class="fa-solid fa-file-import"></i> Import Excel / CSV
                 </button>
                 <input type="file" id="csvFileInput" accept=".xlsx,.xls,.csv" onchange="handleCSVFile(event)" class="hidden">
-                <button type="button" onclick="openDuplicateAuditModal()" class="bg-teal-700 hover:bg-teal-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap">
+                <button type="button" onclick="openDuplicateAuditModal()" class="bg-teal-700 hover:bg-teal-600 text-white px-3 py-2 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap">
                     <i class="fa-solid fa-wand-magic-sparkles"></i> Audit Typos
                 </button>
-                <button type="button" onclick="openSettingsModal()" class="bg-blue-800 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap">
+                <button type="button" onclick="openSettingsModal()" class="bg-blue-800 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap">
                     <i class="fa-solid fa-gear"></i> Settings
                 </button>
-                <button type="button" onclick="openAddEmployeeModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap">
+                <button type="button" onclick="openAddEmployeeModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap">
                     <i class="fa-solid fa-user-plus"></i> Add Employee
                 </button>
-                <button type="button" onclick="exportToExcel()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap">
+                <button type="button" onclick="exportToExcel()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap">
                     <i class="fa-solid fa-file-excel text-emerald-200"></i> Export Excel
                 </button>
             </div>
@@ -783,10 +783,10 @@
             if (!supabaseClient) {
                 el.innerHTML = `<span class="text-xs text-blue-200 bg-blue-950 px-2 py-1 rounded"><i class="fa-solid fa-plug-circle-xmark mr-1"></i>Offline</span>`;
             } else if (window.authUser) {
-                el.innerHTML = `<span class="text-xs text-blue-100 bg-blue-950 border border-blue-800 px-2.5 py-1.5 rounded-lg whitespace-nowrap max-w-[220px] truncate" title="${escapeHtml(window.authUser.email)}"><i class="fa-solid fa-user-shield mr-1"></i>${escapeHtml(window.authUser.email)}</span>
-                    <button type="button" onclick="logout()" class="bg-blue-950 hover:bg-red-700 border border-blue-800 text-white px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer whitespace-nowrap"><i class="fa-solid fa-right-from-bracket mr-1"></i>Log out</button>`;
+                el.innerHTML = `<span class="text-[13px] text-blue-100 bg-blue-950 border border-blue-800 px-3 py-2 rounded-lg whitespace-nowrap max-w-[240px] truncate" title="${escapeHtml(window.authUser.email)}"><i class="fa-solid fa-user-shield mr-1"></i>${escapeHtml(window.authUser.email)}</span>
+                    <button type="button" onclick="logout()" class="bg-blue-950 hover:bg-red-700 border border-blue-800 text-white px-3.5 py-2 rounded-lg text-[13px] font-medium cursor-pointer whitespace-nowrap"><i class="fa-solid fa-right-from-bracket mr-1"></i>Log out</button>`;
             } else {
-                el.innerHTML = `<button type="button" onclick="openLoginModal()" class="bg-blue-950 hover:bg-blue-800 border border-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"><i class="fa-solid fa-lock mr-1"></i>Admin Login</button>`;
+                el.innerHTML = `<button type="button" onclick="openLoginModal()" class="bg-blue-950 hover:bg-blue-800 border border-blue-700 text-white px-3.5 py-2 rounded-lg text-[13px] font-semibold cursor-pointer whitespace-nowrap"><i class="fa-solid fa-lock mr-1"></i>Admin Login</button>`;
             }
         }
 
