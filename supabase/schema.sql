@@ -26,3 +26,8 @@ create policy "anon full access" on public.trainings
   for all to anon using (true) with check (true);
 create policy "anon full access" on public.app_settings
   for all to anon using (true) with check (true);
+
+-- Newer Supabase projects may not expose new tables to the API automatically.
+-- These grants make sure the browser (anon / publishable key) can use the tables.
+grant usage on schema public to anon;
+grant select, insert, update, delete on public.trainings, public.app_settings to anon;
