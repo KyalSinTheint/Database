@@ -131,6 +131,13 @@
     <!-- Main Content Container -->
     <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-6">
         
+        <!-- Financial year tabs: every count, tab and export follows the selected year -->
+        <div class="flex flex-wrap items-center gap-2 mb-4">
+            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 mr-1"><i class="fa-regular fa-calendar mr-1"></i>Financial Year</span>
+            <div id="fyTabs" class="flex flex-wrap gap-1.5"></div>
+            <span id="fyRange" class="text-xs text-gray-500 ml-1"></span>
+        </div>
+
         <!-- Summary Stat Cards -->
         <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-4 mb-6">
             <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
@@ -496,6 +503,11 @@
                 <button type="button" onclick="closeSettingsModal()" class="text-gray-400 hover:text-gray-600 cursor-pointer text-xl font-bold">&times;</button>
             </div>
             <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-700 mb-1">Financial year starts in</label>
+                    <select id="fyStartMonthSelect" onchange="setFyStartMonth(this.value)" class="w-full px-3 py-1.5 border rounded-lg text-sm bg-white cursor-pointer"></select>
+                    <p class="text-[11px] text-gray-500 mt-1">April = FY April to March (e.g. FY 2026-27). January = calendar year (e.g. 2026).</p>
+                </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase text-gray-700 mb-1">Branch Names</label>
                     <div class="flex gap-2 mb-2">
@@ -1314,7 +1326,16 @@
             renderSettingsLists();
         }
 
+        function renderFyStartSelect() {
+            const sel = document.getElementById('fyStartMonthSelect');
+            if (!sel) return;
+            sel.innerHTML = MONTHS.map((m, i) => `<option value="${i + 1}">${m}</option>`).join('');
+            sel.value = String(fyStartMonth());
+            sel.disabled = !isAdminMode();
+        }
+
         function renderSettingsLists() {
+            renderFyStartSelect();
             const bList = document.getElementById('branchList');
             const dList = document.getElementById('departmentList');
             if (bList) {
@@ -1367,15 +1388,70 @@
             });
         }
 
+        // ---------------- Financial year ----------------
+        // window.activePeriod = { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD', label } or null for all time
+        function fyStartMonth() { const m = +(window.dropdownOptions || {}).fyStartMonth; return m >= 1 && m <= 12 ? m : 4; }
+        function fyOf(iso) {   // start year of the FY that contains this date
+            const m = String(iso || '').match(/^(\d{4})-(\d{2})/);
+            if (!m) return null;
+            return +m[2] >= fyStartMonth() ? +m[1] : +m[1] - 1;
+        }
+        function fyRange(startYear) {
+            const sm = fyStartMonth();
+            const from = `${startYear}-${pad2(sm)}-01`;
+            const endY = sm === 1 ? startYear : startYear + 1, endM = sm === 1 ? 12 : sm - 1;
+            const to = `${endY}-${pad2(endM)}-${pad2(new Date(endY, endM, 0).getDate())}`;
+            const label = sm === 1 ? `${startYear}` : `FY ${startYear}-${String(startYear + 1).slice(2)}`;
+            return { from, to, label, year: startYear };
+        }
+        function currentFyYear() { return fyOf(ymd(new Date())); }
+        function inPeriod(d) { const p = window.activePeriod; return !p || (d >= p.from && d <= p.to); }
+        function attDates(emp, cat, mod) { const arr = (emp[cat] || {})[mod]; return Array.isArray(arr) ? arr.filter(inPeriod) : []; }
+        function attCount(emp, cat, mod) { return attDates(emp, cat, mod).length; }
+        function hasBatch(emp) { return !!(emp.licensing && emp.licensing.Batch && emp.licensing.Batch !== '-'); }
+        function periodTotal(emp) { return ['sales', 'development', 'agency', 'vocational', 'ycp', 'licensingAtt'].reduce((n, c) => n + getTotalCategoryCount(emp, c), 0); }
+
+        window.selectedFy = undefined;   // undefined = current FY (default), null = all time, number = FY start year
+        function renderFyTabs() {
+            const el = document.getElementById('fyTabs');
+            if (!el) return;
+            const cur = currentFyYear();
+            let first = cur;
+            (window.employees || []).forEach(emp => ['sales', 'development', 'agency', 'vocational', 'ycp', 'licensingAtt'].forEach(c =>
+                Object.values(emp[c] || {}).forEach(arr => (Array.isArray(arr) ? arr : []).forEach(d => { const y = fyOf(d); if (y !== null && y < first && y > 1990) first = y; }))));
+            const extra = +(window.dropdownOptions || {}).fyExtraYears || 0;
+            const last = cur + 1 + extra;   // always offer next year
+            const sel = window.selectedFy === undefined ? cur : window.selectedFy;
+            window.activePeriod = sel === null ? null : fyRange(sel);
+            const btn = (val, text, active, title = '') => `<button type="button" onclick="selectFy(${val})" title="${title}" class="px-3 py-1 rounded-full text-xs font-semibold border cursor-pointer ${active ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50'}">${text}</button>`;
+            let html = btn('null', 'All years', sel === null);
+            for (let y = first; y <= last; y++) {
+                const r = fyRange(y);
+                html += btn(y, r.label + (y === cur ? ' <span class="opacity-75 font-normal">(current)</span>' : ''), sel === y, `${shortDate(r.from)} – ${shortDate(r.to)}`);
+            }
+            if (isAdminMode()) html += `<button type="button" onclick="addFyYear()" title="Add the next financial year" class="px-2.5 py-1 rounded-full text-xs font-semibold border border-dashed border-gray-400 text-gray-600 hover:bg-gray-50 cursor-pointer">+ Next year</button>`;
+            el.innerHTML = html;
+            document.getElementById('fyRange').textContent = window.activePeriod ? `${shortDate(window.activePeriod.from)} – ${shortDate(window.activePeriod.to)}` : 'All training records';
+        }
+        window.selectFy = function(y) { window.selectedFy = y; renderTable(); };
+        window.addFyYear = function() {
+            if (!isAdminMode()) return;
+            window.dropdownOptions.fyExtraYears = (+window.dropdownOptions.fyExtraYears || 0) + 1;
+            saveData(); renderTable();
+        };
+        window.setFyStartMonth = function(m) {
+            if (!isAdminMode()) return;
+            window.dropdownOptions.fyStartMonth = +m;
+            logAudit('edit_settings', 'Financial year start month', { month: MONTHS[+m - 1] });
+            window.selectedFy = undefined;
+            saveData(); renderTable();
+        };
+
         function getUniqueAttendeesCount() {
             const filtered = getFilteredEmployees();
             const uniqueSet = new Set();
             filtered.forEach(emp => {
-                let hasAttended = false;
-                ['sales', 'development', 'agency', 'vocational', 'ycp', 'licensingAtt'].forEach(cat => {
-                    if (emp[cat]) Object.values(emp[cat]).forEach(arr => { if (Array.isArray(arr) && arr.length > 0) hasAttended = true; });
-                });
-                if (emp.licensing && emp.licensing.Batch && emp.licensing.Batch !== '-') hasAttended = true;
+                let hasAttended = periodTotal(emp) > 0 || (!window.activePeriod && hasBatch(emp));
                 if (hasAttended) {
                     const identifier = (emp.NRC && String(emp.NRC).trim() !== '' && !String(emp.NRC).includes('*')) ? normalizeString(emp.NRC) : (emp.EmpID || String(emp.Name || '').trim().toLowerCase());
                     if (identifier) uniqueSet.add(identifier);
@@ -1388,7 +1464,7 @@
             const filtered = getFilteredEmployees();
             const uniqueSet = new Set();
             filtered.forEach(emp => {
-                if (emp[catKey]) Object.values(emp[catKey]).forEach(arr => { if (Array.isArray(arr)) arr.forEach(d => uniqueSet.add(d)); });
+                if (emp[catKey]) Object.values(emp[catKey]).forEach(arr => { if (Array.isArray(arr)) arr.filter(inPeriod).forEach(d => uniqueSet.add(d)); });
             });
             return uniqueSet.size;
         }
@@ -1397,6 +1473,7 @@
             const filtered = getFilteredEmployees();
             const uniqueSet = new Set();
             filtered.forEach(emp => {
+                if (window.activePeriod && getTotalCategoryCount(emp, 'licensingAtt') === 0) return;   // batch counted in the year it was attended
                 if (emp.licensing && emp.licensing.Batch) {
                     const b = String(emp.licensing.Batch).trim();
                     if (b && b !== '-') uniqueSet.add(b);
@@ -1407,7 +1484,7 @@
 
         function getTotalCategoryCount(emp, catKey) {
             let total = 0;
-            if (emp[catKey]) Object.values(emp[catKey]).forEach(arr => { if (Array.isArray(arr)) total += arr.length; });
+            if (emp[catKey]) Object.values(emp[catKey]).forEach(arr => { if (Array.isArray(arr)) total += arr.filter(inPeriod).length; });
             return total;
         }
 
@@ -1423,7 +1500,7 @@
             const filtered = getFilteredEmployees();
             let attendedCount = 0, answeredCount = 0, notAnsweredCount = 0, niimPassedCount = 0, niimFailedCount = 0;
             filtered.forEach(emp => {
-                let hasAttended = getTotalCategoryCount(emp, 'licensingAtt') > 0 || (emp.licensing && emp.licensing.Batch && emp.licensing.Batch !== '-');
+                let hasAttended = getTotalCategoryCount(emp, 'licensingAtt') > 0 || (!window.activePeriod && hasBatch(emp));
                 if (hasAttended) attendedCount++;
                 const niimStatus = emp.licensing ? emp.licensing["NIIM Exam Status"] : null;
                 const hasNiimAns = niimStatus && niimStatus !== 'Not Answered' && niimStatus !== '-';
@@ -1810,7 +1887,7 @@
         // Excel export: same data as the screen (current search / department / branch filters)
         function isLicensingComplete(emp) {
             const att = emp.licensingAtt || {};
-            return ["Day 1", "Day 2", "Day 3", "Day 4"].filter(d => (att[d] || []).length > 0).length >= 3;
+            return ["Day 1", "Day 2", "Day 3", "Day 4"].filter(d => (att[d] || []).filter(inPeriod).length > 0).length >= 3;
         }
 
         window.exportToExcel = function() {
@@ -1820,7 +1897,7 @@
             if (list.length === 0) { alert("No records to export (check the search and filters)."); return; }
 
             const groups = window.categoryConfig.map(g => ({ ...g, modules: getModulesFor(g.key, g.base()) }));
-            const count = (emp, cat, m) => ((emp[cat] || {})[m] || []).length;
+            const count = (emp, cat, m) => attCount(emp, cat, m);
             const L = emp => emp.licensing || {};
             const idCols = emp => ({
                 "ID Code": emp.EmpID || '', "Name": emp.Name || '', "NRC": emp.NRC || '',
@@ -1838,7 +1915,7 @@
                 });
                 return o;
             };
-            const hasLicensing = emp => getTotalCategoryCount(emp, 'licensingAtt') > 0 || (L(emp).Batch && L(emp).Batch !== '-');
+            const hasLicensing = emp => getTotalCategoryCount(emp, 'licensingAtt') > 0 || (!window.activePeriod && hasBatch(emp));
 
             const wb = XLSX.utils.book_new();
             const addSheet = (name, rows) => {
@@ -1882,7 +1959,7 @@
             // 3) Attendance log: one row per attendance date
             const log = [];
             list.forEach(emp => groups.forEach(g => Object.entries(emp[g.key] || {}).forEach(([m, dates]) => {
-                (Array.isArray(dates) ? dates : []).forEach(d => log.push({
+                (Array.isArray(dates) ? dates : []).filter(inPeriod).forEach(d => log.push({
                     "ID Code": emp.EmpID || '', "Name": emp.Name || '', "NRC": emp.NRC || '',
                     "Department": emp.Department || '', "Branch": emp.BranchName || '',
                     "Category": g.label, "Module": m, "Date": d
@@ -1891,7 +1968,9 @@
             log.sort((a, b) => String(a.Date).localeCompare(String(b.Date)) || a.Name.localeCompare(b.Name));
             addSheet('Attendance Log', log);
 
-            XLSX.writeFile(wb, `Training_Database_${new Date().toISOString().split('T')[0]}.xlsx`);
+            const periodName = window.activePeriod ? window.activePeriod.label.replace(/\s+/g, '_') : 'All_years';
+            XLSX.writeFile(wb, `Training_Database_${periodName}_${ymd(new Date())}.xlsx`);
+            logAudit('export_excel', window.activePeriod ? window.activePeriod.label : 'All years', { people: list.length });
         };
 
         function getStatusBadge(status) {
@@ -1986,6 +2065,7 @@
         }
 
         window.renderTable = function() {
+            renderFyTabs();
             updateStats();
             const thead = document.getElementById('tableHeader');
             const tbody = document.getElementById('tableBody');
@@ -1998,7 +2078,8 @@
             else if (window.currentTab === 'agency') filtered = filtered.filter(e => getTotalCategoryCount(e, 'agency') > 0);
             else if (window.currentTab === 'vocational') filtered = filtered.filter(e => getTotalCategoryCount(e, 'vocational') > 0);
             else if (window.currentTab === 'ycp') filtered = filtered.filter(e => getTotalCategoryCount(e, 'ycp') > 0);
-            else if (window.currentTab === 'licensing') filtered = filtered.filter(e => getTotalCategoryCount(e, 'licensingAtt') > 0 || (e.licensing && e.licensing.Batch && e.licensing.Batch !== '-'));
+            else if (window.currentTab === 'licensing') filtered = filtered.filter(e => getTotalCategoryCount(e, 'licensingAtt') > 0 || (!window.activePeriod && hasBatch(e)));
+            else if (window.currentTab === 'summary' && window.activePeriod) filtered = filtered.filter(e => periodTotal(e) > 0);
 
             if (recordCount) recordCount.innerText = `Showing ${filtered.length} records`;
 
@@ -2028,7 +2109,7 @@
                         const isLic = g.key === 'licensingAtt';
                         if (isLic) r += `<td class="px-2 py-2 text-xs text-center">${emp.licensing?.Batch || '-'}</td>`;
                         g.modules.forEach(m => {
-                            const c = (emp[g.key]?.[m] || []).length;
+                            const c = attCount(emp, g.key, m);
                             r += `<td class="px-2 py-2 text-center"><span onclick="openAttendanceModal(${idx}, '${g.key}', '${jsAttr(m)}')" class="cursor-pointer px-2 py-0.5 rounded text-xs font-bold ${c > 0 ? g.chip : 'text-gray-400'}">${c}</span></td>`;
                         });
                         if (isLic) {
@@ -2107,7 +2188,7 @@
                     let r = `<td class="px-3 py-2.5 font-mono font-bold text-blue-700">${emp.EmpID || '-'}</td><td class="px-3 py-2.5 font-semibold">${emp.Name}</td><td class="px-3 py-2.5 text-xs">${emp.Department || '-'}</td><td class="px-3 py-2.5 text-xs">${emp.BranchName || '-'}</td><td class="px-3 py-2.5 font-mono text-xs">${emp.NRC}</td><td class="px-3 py-2.5 text-xs border-r">${emp.PhoneNumber || '-'}</td>`;
                     if (isLic) r += `<td class="px-2 py-2 text-xs text-center font-semibold border-r">${emp.licensing?.Batch || '-'}</td>`;
                     activeModules.forEach(m => {
-                        const c = (emp[catKey]?.[m] || []).length;
+                        const c = attCount(emp, catKey, m);
                         r += `<td class="px-2 py-2 text-center"><span onclick="openAttendanceModal(${idx}, '${catKey}', '${jsAttr(m)}')" class="cursor-pointer px-2 py-0.5 rounded text-xs font-bold ${c>0?'bg-blue-100 text-blue-800':'text-gray-400'}">${c}</span></td>`;
                     });
                     if (isLic) {
@@ -2131,8 +2212,7 @@
 
         function getLicensingCompletionBadge(emp) {
             if (!emp.licensingAtt) return '<span class="px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-800">NO</span>';
-            let attendedDays = ["Day 1", "Day 2", "Day 3", "Day 4"].filter(d => emp.licensingAtt[d]?.length > 0).length;
-            return attendedDays >= 3 ? '<span class="px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-800">YES</span>' : '<span class="px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-800">NO</span>';
+            return isLicensingComplete(emp) ? '<span class="px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-800">YES</span>' : '<span class="px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-800">NO</span>';
         }
 
         // Images inside certificates load on first open (keeps them out of link previews)
