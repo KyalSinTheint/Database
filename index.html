@@ -1227,14 +1227,14 @@
 
         // Role comes from the app_users table in Supabase ('admin' or 'user'; no row = 'user')
         async function fetchRole(user) {
+            window.roleWarning = '';
             const { data, error } = await supabaseClient.from('app_users').select('role').eq('user_id', user.id).maybeSingle();
             if (error) {
-                // Before schema.sql creates app_users, every account was an admin
-                if (/app_users|does not exist|schema cache/i.test(error.message)) {
-                    console.warn('app_users table missing; run supabase/schema.sql. Treating this account as admin.');
-                    return 'admin';
-                }
+                // Never guess "admin": without a role the account is read-only
                 console.error('Role lookup failed:', error.message);
+                window.roleWarning = /app_users|does not exist|schema cache/i.test(error.message)
+                    ? 'Roles are not set up yet: run supabase/schema.sql in Supabase. Until then every account is read-only (User).'
+                    : 'Could not read your role (' + error.message + '). You are signed in as read-only (User).';
                 return 'user';
             }
             return data && data.role === 'admin' ? 'admin' : 'user';
@@ -1246,6 +1246,7 @@
             showLoginScreen(false);
             setPortalMode(role === 'admin' ? 'admin' : 'public');
             await loadData();
+            if (window.roleWarning) showCloudBanner(window.roleWarning);
             loadRequests();
         }
 
