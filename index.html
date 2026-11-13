@@ -142,7 +142,7 @@
             </div>
             <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
                 <div>
-                    <p class="text-[11px] text-gray-500 font-semibold uppercase tracking-wider">P&S Training Sessions</p>
+                    <p class="text-[11px] text-gray-500 font-semibold uppercase tracking-wider">Product &amp; Sales Sessions</p>
                     <p class="text-xl font-bold text-emerald-700 mt-1" id="statSales">0</p>
                 </div>
                 <div class="bg-emerald-50 text-emerald-600 p-3 rounded-lg"><i class="fa-solid fa-chart-line text-lg"></i></div>
@@ -177,7 +177,7 @@
             </div>
             <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
                 <div>
-                    <p class="text-[11px] text-gray-500 font-semibold uppercase tracking-wider">YCP Sessions</p>
+                    <p class="text-[11px] text-gray-500 font-semibold uppercase tracking-wider">Youth Connect Program Sessions</p>
                     <p class="text-xl font-bold text-amber-700 mt-1" id="statYcp">0</p>
                 </div>
                 <div class="bg-amber-50 text-amber-600 p-3 rounded-lg"><i class="fa-solid fa-user-graduate text-lg"></i></div>
@@ -263,7 +263,7 @@
                     <i class="fa-solid fa-graduation-cap text-teal-600"></i> Vocational
                 </button>
                 <button type="button" onclick="switchTab('ycp')" id="tab-btn-ycp" class="tab-btn px-5 py-3.5 text-sm font-medium text-gray-600 flex items-center gap-2 whitespace-nowrap cursor-pointer">
-                    <i class="fa-solid fa-award text-amber-600"></i> YCP
+                    <i class="fa-solid fa-award text-amber-600"></i> Youth Connect Program
                 </button>
                 <button type="button" onclick="switchTab('licensing')" id="tab-btn-licensing" class="tab-btn px-5 py-3.5 text-sm font-medium text-gray-600 flex items-center gap-2 whitespace-nowrap cursor-pointer">
                     <i class="fa-solid fa-certificate text-purple-600"></i> Licensing
@@ -512,7 +512,8 @@
                     </div>
                     <div id="departmentList" class="flex flex-wrap gap-1.5 p-2 bg-gray-50 rounded-lg border max-h-28 overflow-y-auto"></div>
                 </div>
-                <div class="pt-4 border-t flex justify-end items-center">
+                <div class="pt-4 border-t flex justify-between items-center">
+                    <button type="button" onclick="closeSettingsModal(); openAuditLog()" class="bg-blue-50 text-blue-800 hover:bg-blue-100 px-3 py-2 rounded-lg text-sm font-medium cursor-pointer"><i class="fa-solid fa-clock-rotate-left mr-1"></i>View Audit Trail</button>
                     <button type="button" onclick="closeSettingsModal()" class="bg-gray-200 px-4 py-2 rounded-lg text-sm cursor-pointer">Done</button>
                 </div>
             </div>
@@ -569,6 +570,19 @@
                     <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Branch Name</label>
                     <select id="empBranch" class="w-full px-3 py-2 border rounded-lg text-sm bg-white cursor-pointer"></select>
                 </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Status</label>
+                        <select id="empStatus" class="w-full px-3 py-2 border rounded-lg text-sm bg-white cursor-pointer">
+                            <option value="Active">Active</option>
+                            <option value="Resigned">Resigned</option>
+                        </select>
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Remark</label>
+                        <input type="text" id="empRemark" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g. Resigned on 1 Oct 2026">
+                    </div>
+                </div>
                 <div class="pt-4 flex justify-end gap-2 border-t">
                     <button type="button" onclick="closeEmployeeModal()" class="px-4 py-2 border rounded-lg text-sm font-medium text-gray-600 cursor-pointer">Cancel</button>
                     <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium shadow cursor-pointer">Save Employee</button>
@@ -578,11 +592,35 @@
     </div>
 
     <!-- ATTENDANCE DATE MANAGEMENT MODAL -->
-    <div id="loginModal" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4">
-        <form onsubmit="submitLogin(event)" class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-base font-bold text-blue-900 flex items-center gap-2"><i class="fa-solid fa-user-shield"></i> Admin Login</h3>
-                <button type="button" onclick="closeLoginModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold cursor-pointer">&times;</button>
+    <!-- AUDIT TRAIL MODAL -->
+    <div id="auditLogModal" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-5xl w-full p-5 shadow-2xl max-h-[92vh] flex flex-col">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-base font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left text-blue-700"></i> Audit Trail <span id="auditCount" class="text-xs font-normal text-gray-500"></span></h3>
+                <button type="button" onclick="closeAuditLog()" class="text-gray-400 hover:text-gray-600 text-xl font-bold cursor-pointer">&times;</button>
+            </div>
+            <div class="flex gap-2 mb-3">
+                <input type="text" id="auditSearch" oninput="renderAuditLog()" placeholder="Search by user, action, name, ID…" class="flex-1 px-3 py-2 border rounded-lg text-sm">
+                <button type="button" onclick="downloadAuditLog()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-medium cursor-pointer"><i class="fa-solid fa-file-excel mr-1"></i>Download</button>
+            </div>
+            <div class="overflow-auto border rounded-lg flex-1">
+                <table class="w-full text-xs">
+                    <thead class="bg-gray-100 sticky top-0"><tr><th class="px-2 py-2 text-left">Time</th><th class="px-2 py-2 text-left">User</th><th class="px-2 py-2 text-left">Action</th><th class="px-2 py-2 text-left">Who / what</th><th class="px-2 py-2 text-left">Details</th></tr></thead>
+                    <tbody id="auditLogRows"></tbody>
+                </table>
+            </div>
+            <p class="text-[11px] text-gray-500 mt-2">Latest 1,000 entries. Entries cannot be edited or deleted from the app.</p>
+        </div>
+    </div>
+
+    <!-- LOGIN SCREEN: shown before anything else -->
+    <div id="loginScreen" class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background:linear-gradient(135deg,#1e3a8a 0%,#1d4f91 55%,#25a6df 100%)">
+        <div id="loginLoading" class="text-white text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading…</div>
+        <form id="loginForm" onsubmit="submitLogin(event)" class="hidden bg-white rounded-2xl max-w-sm w-full p-7 shadow-2xl">
+            <div class="flex flex-col items-center text-center mb-5">
+                <img src="assets/kbz-icon.png" alt="KBZ LIFE Insurance" style="height:52px;width:52px">
+                <h2 class="mt-3 text-lg font-bold text-blue-900">Training Record Database Portal</h2>
+                <p class="text-xs text-gray-500">KBZ LIFE Insurance &middot; Learning &amp; Development</p>
             </div>
             <div class="space-y-3 text-sm">
                 <div>
@@ -595,8 +633,8 @@
                 </div>
                 <p id="loginError" class="hidden text-xs text-red-600 font-semibold"></p>
             </div>
-            <button type="submit" id="loginSubmitBtn" class="mt-5 w-full bg-blue-700 hover:bg-blue-600 text-white py-2 rounded-lg text-sm font-semibold cursor-pointer">Log in</button>
-            <p class="mt-3 text-[11px] text-gray-500 text-center">Viewers do not need to log in. Admin accounts are created by the system owner.</p>
+            <button type="submit" id="loginSubmitBtn" class="mt-5 w-full bg-blue-700 hover:bg-blue-600 text-white py-2.5 rounded-lg text-sm font-semibold cursor-pointer">Log in</button>
+            <p class="mt-3 text-[11px] text-gray-500 text-center">Accounts are created by the system administrator.</p>
         </form>
     </div>
 
@@ -699,11 +737,11 @@
 
         // One entry per training category. Summary tab renders all of them.
         window.categoryConfig = [
-            { key: 'sales',        label: 'Sales (P&S)',  base: () => window.salesModules,       head: 'bg-emerald-800', sub: 'bg-emerald-50', chip: 'bg-emerald-100 text-emerald-800' },
+            { key: 'sales',        label: 'Product & Sales', base: () => window.salesModules,       head: 'bg-emerald-800', sub: 'bg-emerald-50', chip: 'bg-emerald-100 text-emerald-800' },
             { key: 'development',  label: 'Development',  base: () => window.developmentModules, head: 'bg-indigo-800',  sub: 'bg-indigo-50',  chip: 'bg-indigo-100 text-indigo-800' },
             { key: 'agency',       label: 'Agency',       base: () => window.agencyModules,      head: 'bg-orange-800',  sub: 'bg-orange-50',  chip: 'bg-orange-100 text-orange-800' },
             { key: 'vocational',   label: 'Vocational',   base: () => window.vocationalModules,  head: 'bg-teal-800',    sub: 'bg-teal-50',    chip: 'bg-teal-100 text-teal-800' },
-            { key: 'ycp',          label: 'YCP',          base: () => window.ycpModules,         head: 'bg-amber-800',   sub: 'bg-amber-50',   chip: 'bg-amber-100 text-amber-800' },
+            { key: 'ycp',          label: 'Youth Connect Program', base: () => window.ycpModules,         head: 'bg-amber-800',   sub: 'bg-amber-50',   chip: 'bg-amber-100 text-amber-800' },
             { key: 'licensingAtt', label: 'Licensing',    base: () => window.licensingDays,      head: 'bg-purple-800',  sub: 'bg-purple-50',  chip: 'bg-purple-100 text-purple-800' }
         ];
 
@@ -777,26 +815,101 @@
             renderTable();
         }
 
+        function isAdminMode() { return window.portalMode === 'admin'; }
+
+        // ---------------- Audit trail ----------------
+        // Who and when are filled in by the database (auth user), so they cannot be faked from the page.
+        async function logAudit(action, target, details) {
+            if (!supabaseClient || !window.authUser) return;
+            try {
+                const { error } = await supabaseClient.from('audit_log').insert({
+                    action, target: String(target ?? '').slice(0, 300), details: details ?? null
+                });
+                if (error) console.warn('Audit log failed:', error.message);
+            } catch (e) { console.warn('Audit log failed:', e); }
+        }
+
+        const AUDIT_LABELS = {
+            login: 'Logged in', logout: 'Logged out', add_employee: 'Added employee', edit_employee: 'Edited employee',
+            delete_employee: 'Deleted employee', import_file: 'Imported file', combine_records: 'Combined records',
+            edit_licensing: 'Edited licensing results', add_attendance: 'Added attendance', remove_attendance: 'Removed attendance',
+            add_option: 'Added list option', remove_option: 'Removed list option', edit_settings: 'Changed settings',
+            edit_certificate: 'Changed certificate settings', edit_signer: 'Changed signer', print_certificate: 'Printed certificate',
+            print_transcript: 'Printed transcript', export_excel: 'Exported Excel'
+        };
+
+        window.openAuditLog = async function() {
+            if (!isAdminMode()) return;
+            document.getElementById('auditLogModal').classList.remove('hidden');
+            const box = document.getElementById('auditLogRows');
+            if (!supabaseClient) { box.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500">Audit trail needs the cloud connection.</td></tr>'; return; }
+            box.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500"><i class="fa-solid fa-spinner fa-spin mr-1"></i>Loading…</td></tr>';
+            const { data, error } = await supabaseClient.from('audit_log')
+                .select('at,email,action,target,details').order('at', { ascending: false }).limit(1000);
+            if (error) { box.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-600">Could not load the audit trail: ${escapeHtml(error.message)}</td></tr>`; return; }
+            window.auditRows = data || [];
+            renderAuditLog();
+        };
+        window.closeAuditLog = function() { document.getElementById('auditLogModal').classList.add('hidden'); };
+
+        window.renderAuditLog = function() {
+            const q = document.getElementById('auditSearch').value.trim().toLowerCase();
+            const rows = (window.auditRows || []).filter(r => !q || [r.email, r.action, AUDIT_LABELS[r.action], r.target, JSON.stringify(r.details || '')]
+                .some(v => String(v || '').toLowerCase().includes(q)));
+            const fmt = d => { const t = new Date(d); return isNaN(t) ? d : t.toLocaleString(); };
+            const detail = d => {
+                if (!d) return '';
+                if (Array.isArray(d.changes)) return d.changes.map(c => `${escapeHtml(c.field)}: ${escapeHtml(c.from || '-')} → ${escapeHtml(c.to || '-')}`).join('<br>');
+                if (Array.isArray(d.merges)) return d.merges.map(escapeHtml).join('<br>');
+                return Object.entries(d).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(typeof v === 'object' ? JSON.stringify(v) : v)}`).join('<br>');
+            };
+            document.getElementById('auditLogRows').innerHTML = rows.length ? rows.map(r => `
+                <tr class="border-b align-top">
+                    <td class="px-2 py-1.5 whitespace-nowrap text-gray-600">${escapeHtml(fmt(r.at))}</td>
+                    <td class="px-2 py-1.5 whitespace-nowrap">${escapeHtml(r.email || '-')}</td>
+                    <td class="px-2 py-1.5 whitespace-nowrap font-semibold">${escapeHtml(AUDIT_LABELS[r.action] || r.action)}</td>
+                    <td class="px-2 py-1.5">${escapeHtml(r.target || '')}</td>
+                    <td class="px-2 py-1.5 text-gray-600">${detail(r.details)}</td>
+                </tr>`).join('') : '<tr><td colspan="5" class="p-4 text-center text-gray-500">No entries.</td></tr>';
+            document.getElementById('auditCount').textContent = `${rows.length} entr${rows.length === 1 ? 'y' : 'ies'}`;
+        };
+
+        window.downloadAuditLog = function() {
+            if (typeof XLSX === 'undefined' || !window.auditRows) return;
+            const ws = XLSX.utils.json_to_sheet(window.auditRows.map(r => ({
+                'Time': new Date(r.at).toLocaleString(), 'User': r.email || '', 'Action': AUDIT_LABELS[r.action] || r.action,
+                'Target': r.target || '', 'Details': r.details ? JSON.stringify(r.details) : ''
+            })));
+            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Audit Trail');
+            XLSX.writeFile(wb, `Audit_Trail_${ymd(new Date())}.xlsx`);
+        };
+
         function renderAuthArea() {
             const el = document.getElementById('authArea');
             if (!el) return;
             if (!supabaseClient) {
                 el.innerHTML = `<span class="text-xs text-blue-200 bg-blue-950 px-2 py-1 rounded"><i class="fa-solid fa-plug-circle-xmark mr-1"></i>Offline</span>`;
             } else if (window.authUser) {
-                el.innerHTML = `<span class="text-[13px] text-blue-100 bg-blue-950 border border-blue-800 px-3 py-2 rounded-lg whitespace-nowrap max-w-[240px] truncate" title="${escapeHtml(window.authUser.email)}"><i class="fa-solid fa-user-shield mr-1"></i>${escapeHtml(window.authUser.email)}</span>
+                const role = isAdminMode() ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-amber-500 text-[10px] font-bold text-white">ADMIN</span>'
+                                           : '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-sky-600 text-[10px] font-bold text-white">USER</span>';
+                el.innerHTML = `<span class="text-[13px] text-blue-100 bg-blue-950 border border-blue-800 px-3 py-2 rounded-lg whitespace-nowrap max-w-[300px] truncate" title="${escapeHtml(window.authUser.email)}"><i class="fa-solid fa-user mr-1"></i>${escapeHtml(window.authUser.email)}${role}</span>
                     <button type="button" onclick="logout()" class="bg-blue-950 hover:bg-red-700 border border-blue-800 text-white px-3.5 py-2 rounded-lg text-[13px] font-medium cursor-pointer whitespace-nowrap"><i class="fa-solid fa-right-from-bracket mr-1"></i>Log out</button>`;
             } else {
-                el.innerHTML = `<button type="button" onclick="openLoginModal()" class="bg-blue-950 hover:bg-blue-800 border border-blue-700 text-white px-3.5 py-2 rounded-lg text-[13px] font-semibold cursor-pointer whitespace-nowrap"><i class="fa-solid fa-lock mr-1"></i>Admin Login</button>`;
+                el.innerHTML = '';
             }
         }
 
-        window.openLoginModal = function() {
-            document.getElementById('loginError').classList.add('hidden');
-            document.getElementById('loginPassword').value = '';
-            document.getElementById('loginModal').classList.remove('hidden');
-            setTimeout(() => document.getElementById('loginEmail').focus(), 50);
-        };
-        window.closeLoginModal = function() { document.getElementById('loginModal').classList.add('hidden'); };
+        function showLoginScreen(show) {
+            const scr = document.getElementById('loginScreen');
+            scr.classList.toggle('hidden', !show);
+            document.getElementById('loginLoading').classList.add('hidden');
+            document.getElementById('loginForm').classList.toggle('hidden', !show);
+            if (show) {
+                document.getElementById('loginError').classList.add('hidden');
+                document.getElementById('loginPassword').value = '';
+                setTimeout(() => document.getElementById('loginEmail').focus(), 50);
+            }
+        }
 
         window.submitLogin = async function(event) {
             event.preventDefault();
@@ -816,43 +929,70 @@
                 return;
             }
             document.getElementById('loginPassword').value = '';
-            closeLoginModal();   // onAuthStateChange switches to admin mode and reloads the full data
+            // onAuthStateChange loads the role and the data
         };
 
         window.logout = async function() {
             if (syncPending || syncing) {
                 if (!confirm('Changes are still being saved. Log out anyway?')) return;
             }
+            await logAudit('logout', window.authUser ? window.authUser.email : '');
             await supabaseClient.auth.signOut();
         };
 
-        async function initAuth() {
-            if (!supabaseClient) { setPortalMode('admin'); await loadData(); return; }
-            const { data } = await supabaseClient.auth.getSession();
-            window.authUser = data && data.session ? data.session.user : null;
-            setPortalMode(window.authUser ? 'admin' : 'public');
+        // Role comes from the app_users table in Supabase ('admin' or 'user'; no row = 'user')
+        async function fetchRole(user) {
+            const { data, error } = await supabaseClient.from('app_users').select('role').eq('user_id', user.id).maybeSingle();
+            if (error) {
+                // Before schema.sql creates app_users, every account was an admin
+                if (/app_users|does not exist|schema cache/i.test(error.message)) {
+                    console.warn('app_users table missing; run supabase/schema.sql. Treating this account as admin.');
+                    return 'admin';
+                }
+                console.error('Role lookup failed:', error.message);
+                return 'user';
+            }
+            return data && data.role === 'admin' ? 'admin' : 'user';
+        }
+
+        async function enterAs(user) {
+            window.authUser = user;
+            const role = await fetchRole(user);
+            showLoginScreen(false);
+            setPortalMode(role === 'admin' ? 'admin' : 'public');
             await loadData();
+        }
+
+        async function initAuth() {
+            if (!supabaseClient) { showLoginScreen(false); setPortalMode('admin'); await loadData(); return; }
+            const { data } = await supabaseClient.auth.getSession();
+            const user = data && data.session ? data.session.user : null;
+            if (user) await enterAs(user);
+            else { window.authUser = null; showLoginScreen(true); }
             supabaseClient.auth.onAuthStateChange((event, session) => {
-                const user = session ? session.user : null;
-                const sameUser = (user && user.id) === (window.authUser && window.authUser.id);
-                window.authUser = user;
-                if (sameUser) return;               // token refresh etc.
-                setTimeout(onAuthChanged, 0);       // do not call Supabase inside this callback
+                const u = session ? session.user : null;
+                const sameUser = (u && u.id) === (window.authUser && window.authUser.id);
+                if (sameUser) { window.authUser = u; return; }   // token refresh etc.
+                setTimeout(() => onAuthChanged(u, event), 0);     // do not call Supabase inside this callback
             });
         }
 
-        async function onAuthChanged() {
+        async function onAuthChanged(user, event) {
             clearTimeout(syncTimer);
             syncPending = false;
             lastSyncedRows = {};
             lastOptsSig = null;
-            if (!window.authUser) {
-                // Remove the full (unmasked) copy from this browser on logout
-                try { localStorage.removeItem('kbz_training_employees'); localStorage.removeItem('kbz_training_options'); } catch(e) {}
-            }
             window.employees = [];
-            setPortalMode(window.authUser ? 'admin' : 'public');
-            await loadData();
+            if (!user) {
+                window.authUser = null;
+                // Remove this browser's copy of the data on logout
+                try { localStorage.removeItem('kbz_training_employees'); localStorage.removeItem('kbz_training_options'); } catch(e) {}
+                setPortalMode('public');
+                showLoginScreen(true);
+                return;
+            }
+            await enterAs(user);
+            if (event === 'SIGNED_IN') logAudit('login', user.email);
         }
 
         function normalizeString(str) {
@@ -899,12 +1039,12 @@
             } else if (d.includes("agency")) {
                 prefix = ie.includes("ext") ? "AE" : "AI";
             } else if (d.includes("banca")) {
-                prefix = ie.includes("ext") ? "BE" : "BA";
+                prefix = ie.includes("ext") ? "BE" : "BI";
             } else if (d.includes("corporate direct sales") || d.includes("cds")) {
                 prefix = ie.includes("ext") ? "CE" : "CI";
             } else if (d.includes("vocational")) {
                 prefix = "VT";
-            } else if (d.includes("student ambassador") || d.includes("ycp")) {
+            } else if (d.includes("student ambassador") || d.includes("ycp") || d.includes("youth connect")) {
                 prefix = "SA";
             } else if (d.includes("internship") || d.includes("intern")) {
                 prefix = "IN";
@@ -972,10 +1112,8 @@
         }
 
         async function fetchCloud() {
-            // Viewers read a masked copy (NRC / phone hidden); only logged-in admins read the real table
-            const source = window.authUser ? 'trainings' : 'public_trainings';
             const { data, error } = await supabaseClient
-                .from(source)
+                .from('trainings')
                 .select('emp_id,name,nrc,department,branch_name,internal_external,position,data_json')
                 .order('position');
             if (error) return { error };
@@ -994,7 +1132,7 @@
         async function loadData() {
             if (supabaseClient) {
                 const res = await fetchCloud();
-                if (res.error && !window.authUser) {
+                if (res.error && !isAdminMode()) {
                     console.error('Supabase load failed:', res.error.message);
                     showCloudBanner('Could not load data from Supabase: ' + res.error.message);
                     window.employees = [];
@@ -1011,13 +1149,13 @@
                     rememberCloud(res.rows, res.opts);
                     subscribeRealtime();
                     showCloudBanner('');
-                    if (res.rows.length > 0 || !window.authUser) {
+                    if (res.rows.length > 0 || !isAdminMode()) {
                         window.employees = res.rows.map(r => r.data_json).filter(Boolean);
                         if (res.opts) window.dropdownOptions = res.opts;
                         normalizeEmployeesData();
                         populateDropdowns();
                         renderTable();
-                        setSyncStatus(window.realtimeLive ? 'live' : 'saved', window.authUser ? '' : 'View only');
+                        setSyncStatus(window.realtimeLive ? 'live' : 'saved', isAdminMode() ? '' : 'View only');
                         return;
                     }
                 }
@@ -1038,7 +1176,7 @@
         }
 
         function saveData() {
-            if (supabaseClient && !window.authUser) return;   // viewers are read-only
+            if (supabaseClient && !isAdminMode()) return;   // users are read-only
             try {
                 localStorage.setItem('kbz_training_employees', JSON.stringify(window.employees));
                 localStorage.setItem('kbz_training_options', JSON.stringify(window.dropdownOptions));
@@ -1058,7 +1196,7 @@
         }
 
         async function syncToSupabase() {
-            if (!supabaseClient || !window.authUser) return true;
+            if (!supabaseClient || !window.authUser || !isAdminMode()) return true;
             if (syncing) { syncAgain = true; return true; }
             syncing = true; syncPending = false;
             let ok = true;
@@ -1118,7 +1256,7 @@
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, scheduleRemoteReload)
                 .subscribe(status => {
                     window.realtimeLive = (status === 'SUBSCRIBED');
-                    setSyncStatus(window.realtimeLive ? 'live' : 'saved', window.authUser ? '' : 'View only');
+                    setSyncStatus(window.realtimeLive ? 'live' : 'saved', isAdminMode() ? '' : 'View only');
                     if (status === 'SUBSCRIBED') scheduleRemoteReload();   // catch up on anything missed while reconnecting
                 });
         }
@@ -1202,11 +1340,13 @@
             let val = inputEl.value.trim();
             if (val && !window.dropdownOptions[type].includes(val)) {
                 window.dropdownOptions[type].push(val);
+                logAudit('add_option', type, { value: val });
                 saveData(); populateDropdowns(); inputEl.value = '';
             }
         };
 
         window.removeOption = function(type, index) {
+            logAudit('remove_option', type, { value: window.dropdownOptions[type][index] });
             window.dropdownOptions[type].splice(index, 1);
             saveData(); populateDropdowns();
         };
@@ -1306,16 +1446,37 @@
         };
         window.closeDuplicateAuditModal = function() { document.getElementById('duplicateAuditModal').classList.add('hidden'); };
 
+        // ---------------- Audit Typos: similar names / NRCs, choose what to keep ----------------
+        function attendanceTotal(emp) {
+            return ['sales', 'development', 'agency', 'vocational', 'ycp', 'licensingAtt'].reduce((n, c) =>
+                n + Object.values(emp[c] || {}).reduce((m, arr) => m + (Array.isArray(arr) ? arr.length : 0), 0), 0);
+        }
+
         window.runTypoAuditScan = function() {
             window.detectedPairs = [];
-            for (let i = 0; i < window.employees.length; i++) {
-                for (let j = i + 1; j < window.employees.length; j++) {
-                    let e1 = window.employees[i], e2 = window.employees[j];
-                    let nameSim = getSimilarityScore(e1.Name || '', e2.Name || '');
-                    let nrcSim = getSimilarityScore(normalizeString(e1.NRC || ''), normalizeString(e2.NRC || ''));
-                    if (nameSim >= 0.75 || nrcSim >= 0.85) {
-                        window.detectedPairs.push({ pairId: window.detectedPairs.length, idx1: i, idx2: j, emp1: e1, emp2: e2 });
-                    }
+            const list = window.employees;
+            for (let i = 0; i < list.length; i++) {
+                for (let j = i + 1; j < list.length; j++) {
+                    const a = list[i], b = list[j];
+                    const n1 = normalizeName(a.Name), n2 = normalizeName(b.Name);
+                    const r1 = normalizeString(a.NRC), r2 = normalizeString(b.NRC);
+                    // skip the slow edit-distance check when lengths alone rule out 85% similarity
+                    const close = (x, y) => Math.abs(x.length - y.length) <= Math.max(x.length, y.length) * 0.15;
+                    const nameSim = (n1 && n2 && close(n1, n2)) ? getSimilarityScore(n1, n2) : 0;
+                    const bothNrc = !!(r1 && r2);
+                    const nrcSame = bothNrc && r1 === r2;
+                    const nrcSim = (bothNrc && !nrcSame && close(r1, r2)) ? getSimilarityScore(r1, r2) : 0;
+                    const reasons = [];
+                    if (nrcSame) reasons.push('Same NRC');
+                    else if (nrcSim >= 0.85) reasons.push('Similar NRC (possible typo)');
+                    if (n1 && n1 === n2) reasons.push('Same name');
+                    else if (nameSim >= 0.85) reasons.push('Similar name (possible typo)');
+                    if (!reasons.length) continue;
+                    if (bothNrc && !nrcSame && nrcSim < 0.85) reasons.push('NRC differs – choose which to keep');
+                    // Default master: the record with more attendance
+                    const master = attendanceTotal(b) > attendanceTotal(a) ? 2 : 1;
+                    window.detectedPairs.push({ pairId: window.detectedPairs.length, emp1: a, emp2: b, reasons,
+                        nrcDiffers: (a.NRC || '') !== (b.NRC || ''), nameDiffers: (a.Name || '') !== (b.Name || ''), master });
                 }
             }
             const container = document.getElementById('auditResultsContainer');
@@ -1325,38 +1486,78 @@
                 return;
             }
             document.getElementById('combineSelectedBtn').classList.remove('hidden');
+            const card = (item, k) => {
+                const e = k === 1 ? item.emp1 : item.emp2;
+                return `<div class="bg-gray-50 p-2 rounded border">
+                    <div class="font-mono font-bold text-blue-700">${escapeHtml(e.EmpID || '-')}</div>
+                    <div class="font-semibold">${escapeHtml(e.Name || '-')}</div>
+                    <div class="font-mono">${escapeHtml(e.NRC || 'No NRC')}</div>
+                    <div class="text-gray-500">${escapeHtml(e.Department || '-')} · ${escapeHtml(e.BranchName || '-')} · ${attendanceTotal(e)} session(s)</div>
+                </div>`;
+            };
+            const radio = (item, field, k, label, checked) => `<label class="flex items-center gap-1 cursor-pointer">
+                <input type="radio" name="pair_${field}_${item.pairId}" value="${k}" ${checked ? 'checked' : ''}> ${label}</label>`;
             container.innerHTML = window.detectedPairs.map(item => `
                 <div class="bg-white border p-3 rounded-lg shadow-sm space-y-2">
-                    <label class="flex items-center gap-2 cursor-pointer font-bold text-gray-800">
-                        <input type="checkbox" id="pair_chk_${item.pairId}" checked class="w-4 h-4 text-indigo-600 rounded"> Match #${item.pairId + 1}
-                    </label>
-                    <div class="grid grid-cols-2 gap-2 text-xs">
-                        <div class="bg-gray-50 p-2 rounded"><strong>${item.emp1.EmpID}:</strong> ${item.emp1.Name} (${item.emp1.NRC || 'No NRC'})</div>
-                        <div class="bg-gray-50 p-2 rounded"><strong>${item.emp2.EmpID}:</strong> ${item.emp2.Name} (${item.emp2.NRC || 'No NRC'})</div>
+                    <div class="flex items-center justify-between gap-2">
+                        <label class="flex items-center gap-2 cursor-pointer font-bold text-gray-800">
+                            <input type="checkbox" id="pair_chk_${item.pairId}" class="w-4 h-4 rounded"> Combine match #${item.pairId + 1}
+                        </label>
+                        <span class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5">${item.reasons.join(' · ')}</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">${card(item, 1)}${card(item, 2)}</div>
+                    <div class="grid grid-cols-3 gap-2 text-xs bg-indigo-50/50 rounded p-2">
+                        <div><div class="font-semibold text-gray-600 mb-1">Keep record (ID, details)</div>
+                            ${radio(item, 'master', 1, escapeHtml(item.emp1.EmpID || 'A'), item.master === 1)}${radio(item, 'master', 2, escapeHtml(item.emp2.EmpID || 'B'), item.master === 2)}</div>
+                        <div><div class="font-semibold text-gray-600 mb-1">Name to keep</div>
+                            ${item.nameDiffers ? radio(item, 'name', 1, escapeHtml(item.emp1.Name || '-'), item.master === 1) + radio(item, 'name', 2, escapeHtml(item.emp2.Name || '-'), item.master === 2) : '<span class="text-gray-500">Same</span>'}</div>
+                        <div><div class="font-semibold text-gray-600 mb-1">NRC to keep</div>
+                            ${item.nrcDiffers ? radio(item, 'nrc', 1, escapeHtml(item.emp1.NRC || 'No NRC'), item.master === 1) + radio(item, 'nrc', 2, escapeHtml(item.emp2.NRC || 'No NRC'), item.master === 2) : '<span class="text-gray-500">Same</span>'}</div>
                     </div>
                 </div>
             `).join('');
         };
 
         window.combineSelectedPairs = function() {
-            let combined = 0, indicesToRemove = new Set();
+            const pick = (item, field) => {
+                const el = document.querySelector(`input[name="pair_${field}_${item.pairId}"]:checked`);
+                return el ? +el.value : (field === 'master' ? item.master : 0);
+            };
+            const removed = new Set();
+            const merges = [];
+            let combined = 0, skipped = 0;
             window.detectedPairs.forEach(item => {
-                if (document.getElementById(`pair_chk_${item.pairId}`)?.checked) {
-                    let p1 = window.employees[item.idx1], p2 = window.employees[item.idx2];
-                    ['sales', 'development', 'agency', 'vocational', 'ycp', 'licensingAtt'].forEach(cat => {
-                        if (p2[cat]) {
-                            if (!p1[cat]) p1[cat] = {};
-                            Object.keys(p2[cat]).forEach(mod => {
-                                if (!p1[cat][mod]) p1[cat][mod] = [];
-                                p2[cat][mod].forEach(d => { if (!p1[cat][mod].includes(d)) p1[cat][mod].push(d); });
-                            });
-                        }
+                if (!document.getElementById(`pair_chk_${item.pairId}`)?.checked) return;
+                if (removed.has(item.emp1) || removed.has(item.emp2)) { skipped++; return; }   // already merged in this run
+                const m = pick(item, 'master');
+                const keep = m === 1 ? item.emp1 : item.emp2, other = m === 1 ? item.emp2 : item.emp1;
+                const nameFrom = item.nameDiffers ? (pick(item, 'name') === 1 ? item.emp1 : item.emp2) : keep;
+                const nrcFrom = item.nrcDiffers ? (pick(item, 'nrc') === 1 ? item.emp1 : item.emp2) : keep;
+                const before = `${keep.EmpID} ${keep.Name} (${keep.NRC || '-'}) + ${other.EmpID} ${other.Name} (${other.NRC || '-'})`;
+                keep.Name = nameFrom.Name;
+                keep.NRC = nrcFrom.NRC;
+                // attendance: union of dates
+                ['sales', 'development', 'agency', 'vocational', 'ycp', 'licensingAtt'].forEach(cat => {
+                    Object.entries(other[cat] || {}).forEach(([mod, dates]) => {
+                        if (!keep[cat]) keep[cat] = {};
+                        if (!keep[cat][mod]) keep[cat][mod] = [];
+                        (Array.isArray(dates) ? dates : []).forEach(d => { if (!keep[cat][mod].includes(d)) keep[cat][mod].push(d); });
+                        keep[cat][mod].sort();
                     });
-                    indicesToRemove.add(item.idx2); combined++;
-                }
+                });
+                // profile and licensing results: keep the chosen record's values, fill blanks from the other
+                ['Position', 'PhoneNumber', 'Department', 'BranchName', 'Region', 'InternalExternal', 'Remark'].forEach(k => { if (!keep[k] && other[k]) keep[k] = other[k]; });
+                keep.licensing = Object.assign({}, other.licensing || {}, keep.licensing || {});
+                removed.add(other);
+                merges.push(`${before} → ${keep.Name} (${keep.NRC || '-'})`);
+                combined++;
             });
-            Array.from(indicesToRemove).sort((a,b)=>b-a).forEach(idx => window.employees.splice(idx, 1));
-            recalculateAllEmployeeIDs(); alert(`Combined ${combined} pair(s) successfully!`); runTypoAuditScan();
+            if (!combined) { alert(skipped ? 'Selected matches overlap with ones already combined. Scan again.' : 'Tick "Combine" on the matches you want to merge.'); return; }
+            window.employees = window.employees.filter(e => !removed.has(e));
+            recalculateAllEmployeeIDs();
+            logAudit('combine_records', `${combined} pair(s)`, { merges });
+            alert(`Combined ${combined} pair(s) successfully!` + (skipped ? `\n${skipped} overlapping match(es) skipped; scan again to review them.` : ''));
+            runTypoAuditScan();
         };
 
         window.triggerCSVImport = function() {
@@ -1421,7 +1622,7 @@
             const reader = new FileReader();
             if (isCsv) {
                 reader.onload = e => importRows(String(e.target.result).replace(/^\uFEFF/, '')
-                    .split(/\r?\n/).filter(l => l.trim().length > 0).map(parseCSVRow));
+                    .split(/\r?\n/).filter(l => l.trim().length > 0).map(parseCSVRow), file.name);
                 reader.readAsText(file);
             } else {
                 if (typeof XLSX === 'undefined') { alert('Excel reader is still loading. Please try again in a moment.'); return; }
@@ -1432,7 +1633,7 @@
                         const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' })
                             .map(r => r.map(cellToText))
                             .filter(r => r.some(c => c !== ''));
-                        importRows(rows);
+                        importRows(rows, file.name);
                     } catch (err) {
                         alert('Could not read the Excel file: ' + err.message);
                     }
@@ -1442,7 +1643,7 @@
         };
 
         // rows[0] = header row, the rest = one attendance record per row
-        async function importRows(rows) {
+        async function importRows(rows, fileName = '') {
             if (!rows || rows.length < 2) { alert("The file contains no data rows."); return; }
 
             const headers = rows[0].map(h => String(h).toLowerCase().replace(/\s+/g, ' ').trim());
@@ -1489,7 +1690,7 @@
                 if (t.includes('dev')) return 'development';
                 if (t.includes('agency')) return 'agency';
                 if (t.includes('vocat')) return 'vocational';
-                if (t.includes('ycp') || t.includes('ambassador')) return 'ycp';
+                if (t.includes('ycp') || t.includes('ambassador') || t.includes('youth')) return 'ycp';
                 return null;
             };
             const catFromModule = m => {
@@ -1596,6 +1797,7 @@
                 (hasLicCols ? `\nLicensing results updated: ${licUpdated}` : '');
             if (sameNrcDifferentName) msg += `\n\nNote: ${sameNrcDifferentName} row(s) have an NRC that already exists under a different name. They were added as new people; use "Audit Typos" to review and combine them.`;
 
+            logAudit('import_file', fileName || 'file', { newPeople, updatedPeople, newAttendance, alreadyRecorded, licUpdated });
             if (supabaseClient) {
                 const ok = await syncNow();
                 msg += ok ? `\n\nSaved to Supabase cloud.` : `\n\nWARNING: saving to Supabase failed. Data is kept in this browser only.`;
@@ -1623,7 +1825,8 @@
             const idCols = emp => ({
                 "ID Code": emp.EmpID || '', "Name": emp.Name || '', "NRC": emp.NRC || '',
                 "Position": emp.Position || '', "Department": emp.Department || '', "Type": emp.InternalExternal || '',
-                "Region": emp.Region || '', "Branch": emp.BranchName || '', "Phone": emp.PhoneNumber || ''
+                "Region": emp.Region || '', "Branch": emp.BranchName || '', "Phone": emp.PhoneNumber || '',
+                "Status": emp.Status === 'Resigned' ? 'Resigned' : 'Active', "Remark": emp.Remark || ''
             });
             const licCols = (emp, withDays) => {
                 const o = { "Batch": L(emp).Batch || '' };
@@ -1758,6 +1961,7 @@
             if (!emp || window.portalMode !== 'admin') return;
             // The form is the full record: clearing a field removes it
             const val = id => document.getElementById(id).value.trim();
+            const beforeLic = Object.assign({}, emp.licensing || {});
             emp.licensing = Object.assign({}, emp.licensing || {}, {
                 'Batch': val('licBatch'),
                 'Pre Test Mark': val('licPreMark'),
@@ -1766,6 +1970,9 @@
                 'NIIM Exam Status': val('licNiimStatus')
             });
             Object.keys(emp.licensing).forEach(k => { if (emp.licensing[k] === '') delete emp.licensing[k]; });
+            const changes = ['Batch', 'Pre Test Mark', 'Pre Test Status', 'NIIM Exam Mark', 'NIIM Exam Status']
+                .filter(k => (beforeLic[k] || '') !== (emp.licensing[k] || '')).map(k => ({ field: k, from: beforeLic[k] || '', to: emp.licensing[k] || '' }));
+            if (changes.length) logAudit('edit_licensing', `${emp.EmpID} ${emp.Name}`, { changes });
             closeLicensingModal();
             saveData();
             renderTable();
@@ -1838,7 +2045,7 @@
                     return `<tr class="hover:bg-blue-50/50">${r}</tr>`;
                 }).join('');
             } else if (window.currentTab === 'identification') {
-                thead.innerHTML = `<tr><th class="px-4 py-3">ID Code</th><th class="px-4 py-3">Name</th><th class="px-4 py-3">Position</th><th class="px-4 py-3">Department</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Branch</th><th class="px-4 py-3">NRC</th>${window.portalMode === 'admin' ? '<th class="px-4 py-3 text-center">Actions</th>' : ''}</tr>`;
+                thead.innerHTML = `<tr><th class="px-4 py-3">ID Code</th><th class="px-4 py-3">Name</th><th class="px-4 py-3">Position</th><th class="px-4 py-3">Department</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Branch</th><th class="px-4 py-3">NRC</th><th class="px-4 py-3">Remark</th>${window.portalMode === 'admin' ? '<th class="px-4 py-3 text-center">Actions</th>' : ''}</tr>`;
                 tbody.innerHTML = filtered.map(emp => {
                     const idx = window.employees.indexOf(emp);
                     let actionsHtml = '';
@@ -1859,12 +2066,13 @@
                             <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-xs bg-gray-100 font-medium">${emp.InternalExternal || 'Internal'}</span></td>
                             <td class="px-4 py-3">${emp.BranchName || '-'}</td>
                             <td class="px-4 py-3 font-mono text-xs">${emp.NRC}</td>
+                            <td class="px-4 py-3 text-xs">${statusBadge(emp)}${emp.Remark ? `<div class="text-gray-500 mt-0.5">${escapeHtml(emp.Remark)}</div>` : ''}</td>
                             ${window.portalMode === 'admin' ? `<td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">${actionsHtml}</td>` : ''}
                         </tr>
                     `;
                 }).join('');
             } else {
-                // Render separate module tabs (Sales, Development, Agency, Vocational, YCP, Licensing)
+                // Render separate module tabs (Product & Sales, Development, Agency, Vocational, Youth Connect Program, Licensing)
                 let activeModules = window.salesModules;
                 let catKey = 'sales';
                 let colHeaderBg = 'bg-emerald-800';
@@ -1914,6 +2122,12 @@
                 }).join('');
             }
         };
+
+        function statusBadge(emp) {
+            return emp.Status === 'Resigned'
+                ? '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-gray-200 text-gray-700">Resigned</span>'
+                : '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800">Active</span>';
+        }
 
         function getLicensingCompletionBadge(emp) {
             if (!emp.licensingAtt) return '<span class="px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-800">NO</span>';
@@ -2219,12 +2433,15 @@
                 signature: pendingTrSignature || ''
             };
             saveData();
+            logAudit('edit_signer', 'Transcript', { name: window.dropdownOptions.transcriptSigner.name, title: window.dropdownOptions.transcriptSigner.title });
             toggleTranscriptSignerEditor(false);
             renderTranscript();
         };
 
         // Print on A4 portrait; long transcripts continue on more pages
         window.printTranscript = function() {
+            const emp = window.employees[window.activeTranscriptEmpIndex];
+            if (emp) logAudit('print_transcript', `${emp.EmpID} ${document.getElementById('trNameInput').value.trim()}`, { from: document.getElementById('trFrom').value, to: document.getElementById('trTo').value });
             const st = document.createElement('style');
             st.textContent = '@page { size: A4 portrait; margin: 12mm; }';
             document.head.appendChild(st);
@@ -2254,6 +2471,8 @@
             document.getElementById('empType').value = emp.InternalExternal || 'Internal';
             document.getElementById('empRegion').value = emp.Region || '';
             document.getElementById('empBranch').value = emp.BranchName || '';
+            document.getElementById('empStatus').value = emp.Status === 'Resigned' ? 'Resigned' : 'Active';
+            document.getElementById('empRemark').value = emp.Remark || '';
             document.getElementById('employeeModal').classList.remove('hidden');
         };
         window.closeEmployeeModal = function() { document.getElementById('employeeModal').classList.add('hidden'); };
@@ -2266,6 +2485,8 @@
             const nameVal = document.getElementById('empName').value.trim();
             const rawNrc = document.getElementById('empNRC').value;
 
+            const FIELDS = ['Name', 'NRC', 'Position', 'PhoneNumber', 'Department', 'InternalExternal', 'Region', 'BranchName', 'Status', 'Remark'];
+            const before = index !== -1 ? Object.fromEntries(FIELDS.map(k => [k, window.employees[index][k] || ''])) : null;
             if (index !== -1) {
                 let emp = window.employees[index];
                 emp.Name = nameVal;
@@ -2276,6 +2497,8 @@
                 emp.InternalExternal = ie;
                 emp.Region = document.getElementById('empRegion').value;
                 emp.BranchName = document.getElementById('empBranch').value;
+                emp.Status = document.getElementById('empStatus').value;
+                emp.Remark = document.getElementById('empRemark').value.trim();
             } else {
                 window.employees.push({
                     Name: nameVal,
@@ -2286,16 +2509,30 @@
                     InternalExternal: ie,
                     Region: document.getElementById('empRegion').value,
                     BranchName: document.getElementById('empBranch').value,
+                    Status: document.getElementById('empStatus').value,
+                    Remark: document.getElementById('empRemark').value.trim(),
                     sales: {}, development: {}, agency: {}, vocational: {}, ycp: {}, licensingAtt: {}, licensing: {}
                 });
             }
 
             recalculateAllEmployeeIDs();
-            closeEmployeeModal(); 
+            if (before) {
+                const emp = window.employees[index];
+                const changes = FIELDS.filter(k => String(before[k]) !== String(emp[k] || '')).map(k => ({ field: k, from: String(before[k]), to: String(emp[k] || '') }));
+                if (changes.length) logAudit('edit_employee', `${emp.EmpID} ${emp.Name}`, { changes });
+            } else {
+                const emp = window.employees[window.employees.length - 1];
+                logAudit('add_employee', `${emp.EmpID} ${emp.Name}`, { NRC: emp.NRC, Department: emp.Department });
+            }
+            closeEmployeeModal();
             renderTable();
         };
 
         window.deleteEmployee = function(index) {
+            const emp = window.employees[index];
+            if (!emp || !isAdminMode()) return;
+            if (!confirm(`Delete ${emp.Name} (${emp.EmpID})? All of this person's training records will be removed.`)) return;
+            logAudit('delete_employee', `${emp.EmpID} ${emp.Name}`, { NRC: emp.NRC, Department: emp.Department, sessions: attendanceTotal(emp) });
             window.employees.splice(index, 1);
             recalculateAllEmployeeIDs();
             renderTable();
@@ -2346,6 +2583,7 @@
             if (!emp[window.activeAttCategory][window.activeAttModule].includes(dVal)) {
                 emp[window.activeAttCategory][window.activeAttModule].push(dVal);
                 emp[window.activeAttCategory][window.activeAttModule].sort();
+                logAudit('add_attendance', `${emp.EmpID} ${emp.Name}`, { program: window.activeAttCategory, session: window.activeAttModule, date: dVal });
                 saveData(); renderAttendanceDatesList();
             }
         };
@@ -2353,6 +2591,8 @@
         window.removeAttendanceDate = function(idx) {
             if (window.activeAttEmpIndex === null || window.portalMode !== 'admin') return;
             const emp = window.employees[window.activeAttEmpIndex];
+            const removedDate = emp[window.activeAttCategory][window.activeAttModule][idx];
+            logAudit('remove_attendance', `${emp.EmpID} ${emp.Name}`, { program: window.activeAttCategory, session: window.activeAttModule, date: removedDate });
             emp[window.activeAttCategory][window.activeAttModule].splice(idx, 1);
             saveData(); renderAttendanceDatesList();
         };
@@ -2362,7 +2602,7 @@
 
         // Warn before leaving while a cloud save is still pending
         window.addEventListener('beforeunload', function(e) {
-            if (supabaseClient && window.authUser && (syncPending || syncing)) {
+            if (supabaseClient && isAdminMode() && (syncPending || syncing)) {
                 syncToSupabase();
                 e.preventDefault();
                 e.returnValue = '';

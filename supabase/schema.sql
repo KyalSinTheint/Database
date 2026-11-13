@@ -1,7 +1,12 @@
 -- Run in Supabase: Dashboard -> SQL Editor -> paste ALL -> Run
--- Then: Authentication -> Sign In / Providers -> turn OFF "Allow new users to sign up",
---       Authentication -> Users -> Add user (with Auto Confirm) for each admin.
 -- Safe to run more than once, and safe if a "trainings" table already exists.
+--
+-- Accounts and roles
+--   1. Authentication -> Sign In / Providers: turn OFF "Allow new users to sign up".
+--   2. Authentication -> Users -> Add user (Auto Confirm) for every person who needs access.
+--   3. Table Editor -> app_users: set role = 'admin' (can change data) or 'user' (read only).
+--      New accounts start as 'user'. Or use:
+--        update public.app_users set role = 'admin' where email = 'name@example.com';
 
 create table if not exists public.trainings (
   emp_id    text,
@@ -47,28 +52,105 @@ alter table public.trainings    enable row level security;
 alter table public.app_settings enable row level security;
 
 -- ------------------------------------------------------------------
--- Security
---   Viewers (not logged in, role "anon"): read only the masked view
---     public_trainings and the app_settings table. No writes.
---   Admins (logged in, role "authenticated"): full access.
+-- Users and roles: everyone must log in.
+--   role 'user'  : read everything (full NRC and phone), change nothing
+--   role 'admin' : read and change everything
 -- ------------------------------------------------------------------
+create table if not exists public.app_users (
+  user_id    uuid primary key references auth.users (id) on delete cascade,
+  email      text,
+  role       text not null default 'user' check (role in ('admin', 'user')),
+  created_at timestamptz not null default now()
+);
+alter table public.app_users enable row level security;
+
+-- First run only: the accounts that already exist were all admins before roles existed
+insert into public.app_users (user_id, email, role)
+select id, email, 'admin' from auth.users
+where not exists (select 1 from public.app_users);
+
+-- Any other existing account becomes a read-only 'user'
+insert into public.app_users (user_id, email, role)
+select id, email, 'user' from auth.users
+on conflict (user_id) do nothing;
+
+-- New accounts are added automatically as 'user'
+create or replace function public.handle_new_app_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.app_users (user_id, email, role) values (new.id, new.email, 'user')
+  on conflict (user_id) do nothing;
+  return new;
+end
+$$;
+drop trigger if exists on_auth_user_created_app_users on auth.users;
+create trigger on_auth_user_created_app_users
+  after insert on auth.users
+  for each row execute function public.handle_new_app_user();
+
+create or replace function public.is_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.app_users where user_id = auth.uid() and role = 'admin')
+$$;
+revoke all on function public.is_admin() from public, anon;
+grant execute on function public.is_admin() to authenticated;
+
+-- Policies (old ones removed first)
 drop policy if exists "anon full access"      on public.trainings;
 drop policy if exists "anon full access"      on public.app_settings;
 drop policy if exists "admins full access"    on public.trainings;
 drop policy if exists "admins full access"    on public.app_settings;
 drop policy if exists "viewers read settings" on public.app_settings;
+drop policy if exists "signed-in read"        on public.trainings;
+drop policy if exists "admins insert"         on public.trainings;
+drop policy if exists "admins update"         on public.trainings;
+drop policy if exists "admins delete"         on public.trainings;
+drop policy if exists "signed-in read"        on public.app_settings;
+drop policy if exists "admins insert"         on public.app_settings;
+drop policy if exists "admins update"         on public.app_settings;
+drop policy if exists "admins delete"         on public.app_settings;
+drop policy if exists "read own role or admin" on public.app_users;
+drop policy if exists "admins manage roles"   on public.app_users;
 
-create policy "admins full access" on public.trainings
-  for all to authenticated using (true) with check (true);
-create policy "admins full access" on public.app_settings
-  for all to authenticated using (true) with check (true);
-create policy "viewers read settings" on public.app_settings
-  for select to anon using (true);
+create policy "signed-in read" on public.trainings     for select to authenticated using (true);
+create policy "admins insert"  on public.trainings     for insert to authenticated with check (public.is_admin());
+create policy "admins update"  on public.trainings     for update to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy "admins delete"  on public.trainings     for delete to authenticated using (public.is_admin());
+create policy "signed-in read" on public.app_settings  for select to authenticated using (true);
+create policy "admins insert"  on public.app_settings  for insert to authenticated with check (public.is_admin());
+create policy "admins update"  on public.app_settings  for update to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy "admins delete"  on public.app_settings  for delete to authenticated using (public.is_admin());
+create policy "read own role or admin" on public.app_users for select to authenticated using (user_id = auth.uid() or public.is_admin());
+create policy "admins manage roles"    on public.app_users for all    to authenticated using (public.is_admin()) with check (public.is_admin());
 
-revoke all on public.trainings, public.app_settings from anon;
+revoke all on public.trainings, public.app_settings, public.app_users from anon;
 grant usage on schema public to anon, authenticated;
-grant select on public.app_settings to anon;
-grant select, insert, update, delete on public.trainings, public.app_settings to authenticated;
+grant select, insert, update, delete on public.trainings, public.app_settings, public.app_users to authenticated;
+
+-- ------------------------------------------------------------------
+-- Audit trail: who did what and when. Append-only from the app:
+-- user and email are filled in by the database from the login.
+-- ------------------------------------------------------------------
+create table if not exists public.audit_log (
+  id      bigint generated by default as identity primary key,
+  at      timestamptz not null default now(),
+  user_id uuid default auth.uid(),
+  email   text default (auth.jwt() ->> 'email'),
+  action  text not null,
+  target  text,
+  details jsonb
+);
+create index if not exists audit_log_at_idx on public.audit_log (at desc);
+alter table public.audit_log enable row level security;
+
+drop policy if exists "signed-in write own entries" on public.audit_log;
+drop policy if exists "admins read"                 on public.audit_log;
+create policy "signed-in write own entries" on public.audit_log for insert to authenticated
+  with check (user_id = auth.uid() and email is not distinct from (auth.jwt() ->> 'email'));
+create policy "admins read" on public.audit_log for select to authenticated using (public.is_admin());
+
+revoke all on public.audit_log from anon, authenticated;
+grant select, insert on public.audit_log to authenticated;   -- no update / delete
 
 -- Realtime: push changes to every open dashboard (safe to run more than once)
 do $$ begin
@@ -93,11 +175,11 @@ select
   t.department,
   t.branch_name,
   case c.key
-    when 'sales'        then 'Sales (P&S)'
+    when 'sales'        then 'Product & Sales'
     when 'development'  then 'Development'
     when 'agency'       then 'Agency'
     when 'vocational'   then 'Vocational'
-    when 'ycp'          then 'YCP'
+    when 'ycp'          then 'Youth Connect Program'
     when 'licensingAtt' then 'Licensing'
   end              as category,
   m.key            as module,
@@ -157,51 +239,12 @@ where jsonb_typeof(t.data_json) = 'object'
 revoke all on public.training_licensing from anon;
 grant select on public.training_licensing to authenticated;
 
--- ------------------------------------------------------------------
--- Masked copy for viewers: NRC and phone number are hidden.
--- Runs with the owner's rights (no security_invoker) so viewers can read
--- it without having access to the real table.
--- ------------------------------------------------------------------
-create or replace function public.mask_nrc(v text) returns text
-language sql immutable as $$
-  select case
-    when v is null or btrim(v) = '' then v
-    when length(v) <= 5 then repeat('*', length(v))
-    else left(v, length(v) - 5) || '*****'
-  end
-$$;
+-- The masked copy for anonymous viewers is no longer used (everyone logs in)
+drop view if exists public.public_trainings;
+drop function if exists public.mask_nrc(text);
+drop function if exists public.mask_phone(text);
 
-create or replace function public.mask_phone(v text) returns text
-language sql immutable as $$
-  select case
-    when v is null or btrim(v) = '' then v
-    when length(v) <= 3 then '***'
-    else repeat('*', length(v) - 3) || right(v, 3)
-  end
-$$;
-
-create or replace view public.public_trainings as
-select
-  t.emp_id,
-  t.name,
-  public.mask_nrc(t.nrc) as nrc,
-  t.department,
-  t.branch_name,
-  t.internal_external,
-  t.position,
-  case when jsonb_typeof(t.data_json) = 'object'
-       then t.data_json || jsonb_build_object(
-              'NRC',         public.mask_nrc(t.data_json ->> 'NRC'),
-              'PhoneNumber', public.mask_phone(t.data_json ->> 'PhoneNumber'))
-       else t.data_json
-  end as data_json
-from public.trainings t;
-
-revoke all on public.public_trainings from anon, authenticated;
-grant select on public.public_trainings to anon, authenticated;
-
--- Viewers cannot receive Realtime events from the real table, so every change
--- also updates app_settings 'last_change', which viewers can listen to.
+-- Every change also updates app_settings 'last_change' (open dashboards refresh on it)
 create or replace function public.touch_last_change() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
