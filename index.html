@@ -149,7 +149,8 @@
         <!-- Financial year tabs: every count, tab and export follows the selected year -->
         <div class="flex flex-wrap items-center gap-2 mb-4">
             <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 mr-1"><i class="fa-regular fa-calendar mr-1"></i>Financial Year</span>
-            <div id="fyTabs" class="flex flex-wrap gap-1.5"></div>
+            <select id="fySelect" onchange="selectFy(this.value === 'all' ? null : +this.value)" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-semibold bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
+            <button type="button" id="fyAddBtn" onclick="addFyYear()" title="Add the next year to the list" class="hidden px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-dashed border-gray-400 text-gray-600 hover:bg-gray-50 cursor-pointer">+ Next year</button>
             <span id="fyRange" class="text-xs text-gray-500 ml-1"></span>
         </div>
 
@@ -583,8 +584,7 @@
                 <div>
                     <label class="block text-xs font-semibold uppercase text-gray-700 mb-1">Financial year starts in</label>
                     <select id="fyStartMonthSelect" onchange="setFyStartMonth(this.value)" class="w-full px-3 py-1.5 border rounded-lg text-sm bg-white cursor-pointer"></select>
-                    <p class="text-[11px] text-gray-500 mt-1">April = FY April to March (e.g. FY 2026-27). January = calendar year (e.g. 2026).</p>
-                    <div id="fyHiddenList" class="mt-2 text-xs"></div>
+                    <p class="text-[11px] text-gray-500 mt-1">January = calendar year (2026 = Jan–Dec 2026). Another month: 2026 = that month 2026 to the month before in 2027.</p>
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase text-gray-700 mb-1">Branch Names</label>
@@ -1405,10 +1405,6 @@
         }
 
         function renderFyStartSelect() {
-            const hl = document.getElementById('fyHiddenList');
-            const hidden = ((window.dropdownOptions || {}).fyHidden || []).map(Number);
-            if (hl) hl.innerHTML = hidden.length ? '<span class="text-gray-600 font-semibold mr-1">Removed year tabs:</span>' + hidden.map(y =>
-                `<span class="inline-flex items-center gap-1 px-2 py-0.5 mr-1 mb-1 bg-gray-100 border rounded">${fyRange(y).label}${isAdminMode() ? ` <button type="button" onclick="restoreFyYear(${y})" class="text-blue-700 underline cursor-pointer">restore</button>` : ''}</span>`).join('') : '';
             const sel = document.getElementById('fyStartMonthSelect');
             if (!sel) return;
             sel.innerHTML = MONTHS.map((m, i) => `<option value="${i + 1}">${m}</option>`).join('');
@@ -1472,7 +1468,7 @@
 
         // ---------------- Financial year ----------------
         // window.activePeriod = { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD', label } or null for all time
-        function fyStartMonth() { const m = +(window.dropdownOptions || {}).fyStartMonth; return m >= 1 && m <= 12 ? m : 4; }
+        function fyStartMonth() { const m = +(window.dropdownOptions || {}).fyStartMonth; return m >= 1 && m <= 12 ? m : 1; }
         function fyOf(iso) {   // start year of the FY that contains this date
             const m = String(iso || '').match(/^(\d{4})-(\d{2})/);
             if (!m) return null;
@@ -1483,7 +1479,7 @@
             const from = `${startYear}-${pad2(sm)}-01`;
             const endY = sm === 1 ? startYear : startYear + 1, endM = sm === 1 ? 12 : sm - 1;
             const to = `${endY}-${pad2(endM)}-${pad2(new Date(endY, endM, 0).getDate())}`;
-            const label = sm === 1 ? `${startYear}` : `FY ${startYear}-${String(startYear + 1).slice(2)}`;
+            const label = `${startYear}`;
             return { from, to, label, year: startYear };
         }
         function currentFyYear() { return fyOf(ymd(new Date())); }
@@ -1495,65 +1491,35 @@
 
         window.selectedFy = undefined;   // undefined = current FY (default), null = all time, number = FY start year
         function renderFyTabs() {
-            const el = document.getElementById('fyTabs');
+            const el = document.getElementById('fySelect');
             if (!el) return;
             const cur = currentFyYear();
             let first = cur;
             (window.employees || []).forEach(emp => ['sales', 'development', 'agency', 'vocational', 'ycp', 'licensingAtt'].forEach(c =>
                 Object.values(emp[c] || {}).forEach(arr => (Array.isArray(arr) ? arr : []).forEach(d => { const y = fyOf(d); if (y !== null && y < first && y > 1990) first = y; }))));
-            const extra = +(window.dropdownOptions || {}).fyExtraYears || 0;
-            const last = cur + 1 + extra;   // always offer next year
-            const hidden = new Set(((window.dropdownOptions || {}).fyHidden || []).map(Number));
-            let sel = window.selectedFy === undefined ? (hidden.has(cur) ? null : cur) : window.selectedFy;
-            if (sel !== null && hidden.has(sel)) sel = null;
+            const last = cur + 1 + (+(window.dropdownOptions || {}).fyExtraYears || 0);   // always offer next year
+            const sel = window.selectedFy === undefined ? cur : window.selectedFy;
             window.activePeriod = sel === null ? null : fyRange(sel);
-            const admin = isAdminMode();
-            const btn = (val, text, active, title = '', removable = false) => `<span class="inline-flex items-center rounded-full border text-xs font-semibold ${active ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-300'}">
-                <button type="button" onclick="selectFy(${val})" title="${title}" class="pl-3 ${removable ? 'pr-1.5' : 'pr-3'} py-1 rounded-full cursor-pointer ${active ? '' : 'hover:bg-blue-50'}">${text}</button>
-                ${removable ? `<button type="button" onclick="removeFyYear(${val})" title="Remove this financial year tab" class="pr-2 pl-0.5 py-1 opacity-60 hover:opacity-100 cursor-pointer">&times;</button>` : ''}</span>`;
-            let html = btn('null', 'All years', sel === null);
-            for (let y = first; y <= last; y++) {
-                if (hidden.has(y)) continue;
-                const r = fyRange(y);
-                html += btn(y, r.label + (y === cur ? ' <span class="opacity-75 font-normal">(current)</span>' : ''), sel === y, `${shortDate(r.from)} – ${shortDate(r.to)}`, admin);
-            }
-            if (isAdminMode()) html += `<button type="button" onclick="addFyYear()" title="Add the next financial year" class="px-2.5 py-1 rounded-full text-xs font-semibold border border-dashed border-gray-400 text-gray-600 hover:bg-gray-50 cursor-pointer">+ Next year</button>`;
+            let html = `<option value="all">All years</option>`;
+            for (let y = last; y >= first; y--) html += `<option value="${y}">${y}${y === cur ? ' (current)' : ''}</option>`;
             el.innerHTML = html;
+            el.value = sel === null ? 'all' : String(sel);
+            document.getElementById('fyAddBtn').classList.toggle('hidden', !isAdminMode());
             document.getElementById('fyRange').textContent = window.activePeriod ? `${shortDate(window.activePeriod.from)} – ${shortDate(window.activePeriod.to)}` : 'All training records';
         }
         window.selectFy = function(y) { window.selectedFy = y; renderTable(); };
         window.addFyYear = function() {
             if (!isAdminMode()) return;
-            const hidden = (window.dropdownOptions.fyHidden || []).map(Number);
-            const cur = currentFyYear();
-            const last = cur + 1 + (+window.dropdownOptions.fyExtraYears || 0);
-            // bring back a removed future year first, otherwise add one more year
-            const back = hidden.filter(y => y > cur && y <= last).sort((a, b) => a - b)[0];
-            if (back !== undefined) window.dropdownOptions.fyHidden = hidden.filter(y => y !== back);
-            else window.dropdownOptions.fyExtraYears = (+window.dropdownOptions.fyExtraYears || 0) + 1;
+            window.dropdownOptions.fyExtraYears = (+window.dropdownOptions.fyExtraYears || 0) + 1;
+            const y = currentFyYear() + 1 + window.dropdownOptions.fyExtraYears;
+            logAudit('edit_settings', 'Added year', { year: String(y) });
+            window.selectedFy = y;
             saveData(); renderTable();
-        };
-        // Removes the tab only; training records of that year are kept (still in "All years")
-        window.removeFyYear = function(y) {
-            if (!isAdminMode()) return;
-            const r = fyRange(y);
-            if (!confirm(`Remove the ${r.label} tab?\n\nTraining records in this year are NOT deleted; they still show under "All years". You can bring the tab back in Settings.`)) return;
-            const hidden = new Set((window.dropdownOptions.fyHidden || []).map(Number)); hidden.add(+y);
-            window.dropdownOptions.fyHidden = [...hidden].sort((a, b) => a - b);
-            if (window.selectedFy === y || (window.selectedFy === undefined && y === currentFyYear())) window.selectedFy = undefined;
-            logAudit('edit_settings', 'Removed financial year tab', { year: r.label });
-            saveData(); renderTable(); renderSettingsLists();
-        };
-        window.restoreFyYear = function(y) {
-            if (!isAdminMode()) return;
-            window.dropdownOptions.fyHidden = (window.dropdownOptions.fyHidden || []).map(Number).filter(v => v !== +y);
-            logAudit('edit_settings', 'Restored financial year tab', { year: fyRange(+y).label });
-            saveData(); renderTable(); renderSettingsLists();
         };
         window.setFyStartMonth = function(m) {
             if (!isAdminMode()) return;
             window.dropdownOptions.fyStartMonth = +m;
-            logAudit('edit_settings', 'Financial year start month', { month: MONTHS[+m - 1] });
+            logAudit('edit_settings', 'Year start month', { month: MONTHS[+m - 1] });
             window.selectedFy = undefined;
             saveData(); renderTable();
         };
