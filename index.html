@@ -124,19 +124,19 @@
                     <i class="fa-solid fa-file-import"></i> Import
                 </button>
                 <input type="file" id="csvFileInput" accept=".xlsx,.xls,.csv" onchange="handleCSVFile(event)" class="hidden">
-                <button type="button" onclick="openDuplicateAuditModal()" class="bg-teal-700 hover:bg-teal-600 text-white px-3 py-2 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap">
+                <button type="button" data-admin-only="1" onclick="openDuplicateAuditModal()" class="bg-teal-700 hover:bg-teal-600 text-white px-3 py-2 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap">
                     <i class="fa-solid fa-wand-magic-sparkles"></i> Audit Typos
                 </button>
-                <button type="button" onclick="openAgentCertModal()" class="bg-sky-700 hover:bg-sky-600 text-white px-3 py-2 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap">
+                <button type="button" data-admin-only="1" onclick="openAgentCertModal()" class="bg-sky-700 hover:bg-sky-600 text-white px-3 py-2 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap">
                     <i class="fa-solid fa-certificate"></i> Certificate
                 </button>
-                <button type="button" onclick="openSettingsModal()" class="bg-blue-800 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap">
+                <button type="button" data-admin-only="1" onclick="openSettingsModal()" class="bg-blue-800 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap">
                     <i class="fa-solid fa-gear"></i> Settings
                 </button>
                 <button type="button" onclick="openAddEmployeeModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap">
                     <i class="fa-solid fa-user-plus"></i> Add Employee
                 </button>
-                <button type="button" onclick="exportToExcel()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap">
+                <button type="button" data-admin-only="1" onclick="exportToExcel()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap">
                     <i class="fa-solid fa-file-excel text-emerald-200"></i> Export
                 </button>
             </div>
@@ -673,15 +673,31 @@
                         <input type="text" id="empRemark" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g. Resigned on 1 Oct 2026">
                     </div>
                 </div>
+                <p class="user-approval-note hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5"><i class="fa-solid fa-user-check mr-1"></i>Your change will be sent to an admin for approval.</p>
                 <div class="pt-4 flex justify-end gap-2 border-t">
                     <button type="button" onclick="closeEmployeeModal()" class="px-4 py-2 border rounded-lg text-sm font-medium text-gray-600 cursor-pointer">Cancel</button>
-                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium shadow cursor-pointer">Save Employee</button>
+                    <button type="submit" id="empSubmitBtn" class="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium shadow cursor-pointer">Save Employee</button>
                 </div>
             </form>
         </div>
     </div>
 
     <!-- ATTENDANCE DATE MANAGEMENT MODAL -->
+    <!-- CHANGE REQUESTS (approvals / my requests) -->
+    <div id="requestsModal" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-3xl w-full p-5 shadow-2xl max-h-[92vh] flex flex-col">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-base font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-inbox text-blue-700"></i> <span id="requestsTitle">Approvals</span></h3>
+                <button type="button" onclick="closeRequests()" class="text-gray-400 hover:text-gray-600 text-xl font-bold cursor-pointer">&times;</button>
+            </div>
+            <div id="requestsTabs" class="flex gap-2 mb-3">
+                <button type="button" data-tab="pending" onclick="setRequestsTab('pending')">Pending</button>
+                <button type="button" data-tab="history" onclick="setRequestsTab('history')">History</button>
+            </div>
+            <div id="requestsList" class="overflow-y-auto space-y-2 text-xs flex-1"></div>
+        </div>
+    </div>
+
     <!-- AUDIT TRAIL MODAL -->
     <div id="auditLogModal" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl max-w-5xl w-full p-5 shadow-2xl max-h-[92vh] flex flex-col">
@@ -766,7 +782,7 @@
             </div>
             <div class="pt-4 flex justify-end gap-2 border-t mt-4">
                 <button type="button" onclick="closeLicensingModal()" class="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded-lg text-xs font-medium cursor-pointer">Cancel</button>
-                <button type="button" onclick="saveLicensingModal()" class="bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer">Save</button>
+                <button type="button" id="licSubmitBtn" onclick="saveLicensingModal()" class="bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer">Save</button>
             </div>
         </div>
     </div>
@@ -776,6 +792,7 @@
             <h3 id="attModalTitle" class="text-base font-bold text-gray-800 mb-1">Manage Attendance</h3>
             <p id="attModalSubtitle" class="text-xs text-gray-500 mb-4"></p>
             <div id="attendanceEditSection" class="bg-gray-50 p-3 rounded-lg border mb-4">
+                <p class="user-approval-note hidden text-xs text-amber-700 mb-2"><i class="fa-solid fa-user-check mr-1"></i>Adding or removing a date sends a request to an admin.</p>
                 <label class="block text-xs font-semibold uppercase text-gray-700 mb-1">Select Attendance Date</label>
                 <div class="flex gap-2">
                     <input type="date" id="attendanceDateInput" class="flex-1 px-3 py-1.5 border rounded-lg text-sm bg-white">
@@ -896,7 +913,10 @@
         function setPortalMode(mode) {
             window.portalMode = mode;
             const adminGroup = document.getElementById('adminActionGroup');
-            if (adminGroup) adminGroup.classList.toggle('hidden', mode !== 'admin');
+            // users see Import and Add Employee (their changes go to an admin for approval)
+            if (adminGroup) adminGroup.classList.toggle('hidden', !(mode === 'admin' || (supabaseClient && window.authUser)));
+            document.querySelectorAll('[data-admin-only]').forEach(el => el.style.display = mode === 'admin' ? '' : 'none');
+            document.querySelectorAll('.user-approval-note').forEach(el => el.classList.toggle('hidden', mode === 'admin'));
             if (mode !== 'admin') {
                 ['agentCertModal', 'transcriptCertModal', 'employeeModal', 'licensingModal', 'settingsModal', 'duplicateAuditModal']
                     .forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
@@ -906,6 +926,179 @@
         }
 
         function isAdminMode() { return window.portalMode === 'admin'; }
+        // Admins change data directly; logged-in users can propose changes for approval
+        function canEditData() { return isAdminMode() || !!(supabaseClient && window.authUser); }
+
+        // ---------------- Change requests (users propose, admins approve) ----------------
+        const EMP_FIELDS = ['Name', 'NRC', 'Position', 'PhoneNumber', 'Department', 'InternalExternal', 'Region', 'BranchName', 'Status', 'Remark'];
+        const LIC_FIELDS = ['Batch', 'Pre Test Mark', 'Pre Test Status', 'NIIM Exam Mark', 'NIIM Exam Status'];
+        const REQUEST_LABELS = { add_employee: 'Add employee', edit_employee: 'Edit employee', delete_employee: 'Delete employee',
+            add_attendance: 'Add attendance', remove_attendance: 'Remove attendance', edit_licensing: 'Licensing results', import_file: 'Import file' };
+
+        function newUid() {
+            try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
+            return 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        }
+        function programLabel(cat) { const g = window.categoryConfig.find(c => c.key === cat); return g ? g.label : cat; }
+        function targetOf(emp) { return { uid: emp.uid || null, empId: emp.EmpID || '', name: emp.Name || '', nrc: emp.NRC || '' }; }
+        function findTarget(t) {
+            if (!t) return null;
+            let e = t.uid ? window.employees.find(x => x.uid === t.uid) : null;
+            if (!e) e = window.employees.find(x => normalizeName(x.Name) === normalizeName(t.name) && normalizeString(x.NRC) === normalizeString(t.nrc));
+            return e || null;
+        }
+
+        async function submitChange(kind, target, summary, payload) {
+            if (!supabaseClient || !window.authUser) { alert('Please log in first.'); return false; }
+            const { error } = await supabaseClient.from('change_requests').insert({ kind, target: String(target).slice(0, 300), summary: String(summary).slice(0, 1000), payload });
+            if (error) { alert('Could not send the request: ' + error.message); return false; }
+            logAudit('request_change', target, { kind, summary });
+            alert('Sent to an admin for approval.\nYou can follow it under "My requests" (inbox icon at the top right).');
+            loadRequests();
+            return true;
+        }
+
+        // Applies an approved request to the data (admin side)
+        async function applyChange(kind, p) {
+            const missing = { ok: false, msg: 'The person in this request was not found (maybe deleted or renamed).' };
+            if (kind === 'import_file') { await importRows(p.rows || [], p.fileName || 'file'); return { ok: true, handled: true }; }
+            if (kind === 'add_employee') {
+                const rec = Object.assign({ sales: {}, development: {}, agency: {}, vocational: {}, ycp: {}, licensingAtt: {}, licensing: {} }, p.record || {});
+                rec.uid = newUid();
+                window.employees.push(rec);
+                return { ok: true };
+            }
+            const e = findTarget(p.target);
+            if (!e) return missing;
+            if (kind === 'edit_employee') { (p.changes || []).forEach(c => { if (EMP_FIELDS.includes(c.field)) e[c.field] = c.to; }); return { ok: true }; }
+            if (kind === 'delete_employee') { window.employees.splice(window.employees.indexOf(e), 1); return { ok: true }; }
+            if (kind === 'edit_licensing') {
+                e.licensing = Object.assign({}, e.licensing || {});
+                (p.changes || []).forEach(c => { if (!LIC_FIELDS.includes(c.field)) return; if (c.to) e.licensing[c.field] = c.to; else delete e.licensing[c.field]; });
+                return { ok: true };
+            }
+            if (kind === 'add_attendance' || kind === 'remove_attendance') {
+                if (!e[p.cat]) e[p.cat] = {};
+                const arr = e[p.cat][p.mod] = (e[p.cat][p.mod] || []).slice();
+                if (kind === 'add_attendance') { if (!arr.includes(p.date)) { arr.push(p.date); arr.sort(); } }
+                else e[p.cat][p.mod] = arr.filter(d => d !== p.date);
+                return { ok: true };
+            }
+            return { ok: false, msg: 'Unknown request type.' };
+        }
+
+        window.requests = [];
+        async function loadRequests() {
+            if (!supabaseClient || !window.authUser) { window.requests = []; renderRequestBadge(); return; }
+            const { data, error } = await supabaseClient.from('change_requests')
+                .select('id,created_at,requested_by,requester_email,status,kind,target,summary,payload,reviewer_email,reviewed_at,review_note')
+                .order('created_at', { ascending: false }).limit(300);
+            if (error) { console.warn('Requests:', error.message); return; }
+            window.requests = data || [];
+            renderRequestBadge();
+            if (!document.getElementById('requestsModal').classList.contains('hidden')) renderRequests();
+        }
+        let requestsTimer = null;
+        function scheduleRequestsReload() { clearTimeout(requestsTimer); requestsTimer = setTimeout(loadRequests, 800); }
+
+        function myPendingCount() {
+            return window.requests.filter(r => r.status === 'pending' && (isAdminMode() || r.requested_by === (window.authUser || {}).id)).length;
+        }
+        function renderRequestBadge() {
+            const el = document.getElementById('requestBadge');
+            if (!el) return;
+            const n = myPendingCount();
+            el.textContent = n;
+            el.classList.toggle('hidden', n === 0);
+        }
+
+        window.requestsTab = 'pending';
+        window.openRequests = function() {
+            document.getElementById('requestsTitle').textContent = isAdminMode() ? 'Approvals' : 'My requests';
+            document.getElementById('requestsModal').classList.remove('hidden');
+            renderRequests();
+            loadRequests();
+        };
+        window.closeRequests = function() { document.getElementById('requestsModal').classList.add('hidden'); };
+        window.setRequestsTab = function(t) { window.requestsTab = t; renderRequests(); };
+
+        function requestDetails(r) {
+            const p = r.payload || {};
+            const li = t => `<li>${t}</li>`;
+            if (Array.isArray(p.changes)) return '<ul class="list-disc ml-4">' + p.changes.map(c => li(`<b>${escapeHtml(c.field)}</b>: ${escapeHtml(c.from || '-')} → <span class="text-emerald-700 font-semibold">${escapeHtml(c.to || '-')}</span>`)).join('') + '</ul>';
+            if (r.kind === 'add_employee') return '<ul class="list-disc ml-4">' + Object.entries(p.record || {}).filter(([, v]) => v).map(([k, v]) => li(`<b>${escapeHtml(k)}</b>: ${escapeHtml(v)}`)).join('') + '</ul>';
+            if (r.kind === 'import_file') {
+                const rows = p.rows || [];
+                const head = rows[0] || [], body = rows.slice(1, 11);
+                return `<div class="overflow-x-auto"><table class="text-[11px] border mt-1"><thead class="bg-gray-100"><tr>${head.map(h => `<th class="px-1.5 py-1 border">${escapeHtml(h)}</th>`).join('')}</tr></thead>
+                    <tbody>${body.map(row => `<tr>${row.map(c => `<td class="px-1.5 py-0.5 border">${escapeHtml(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+                    ${rows.length > 11 ? `<div class="text-gray-500 mt-1">… and ${rows.length - 11} more row(s)</div>` : ''}`;
+            }
+            return '';
+        }
+
+        function renderRequests() {
+            const mine = r => r.requested_by === (window.authUser || {}).id;
+            const list = window.requests.filter(r => (isAdminMode() || mine(r)) && (window.requestsTab === 'pending' ? r.status === 'pending' : r.status !== 'pending'));
+            document.querySelectorAll('#requestsTabs button').forEach(b => {
+                const on = b.dataset.tab === window.requestsTab;
+                b.className = `px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${on ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`;
+            });
+            const chip = st => ({ pending: 'bg-amber-100 text-amber-800', approved: 'bg-emerald-100 text-emerald-800', rejected: 'bg-red-100 text-red-800', cancelled: 'bg-gray-200 text-gray-700' }[st] || 'bg-gray-100');
+            const fmt = d => { const t = new Date(d); return isNaN(t) ? (d || '') : t.toLocaleString(); };
+            document.getElementById('requestsList').innerHTML = list.length ? list.map(r => `
+                <div class="border rounded-lg p-3 bg-white">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="px-2 py-0.5 rounded text-[11px] font-bold ${chip(r.status)}">${escapeHtml(r.status.toUpperCase())}</span>
+                        <span class="font-semibold text-gray-800">${escapeHtml(REQUEST_LABELS[r.kind] || r.kind)}</span>
+                        <span class="text-gray-500">· ${escapeHtml(r.requester_email || '-')} · ${escapeHtml(fmt(r.created_at))}</span>
+                    </div>
+                    <div class="mt-1 text-gray-800">${escapeHtml(r.summary || '')}</div>
+                    <div class="mt-1 text-gray-600">${requestDetails(r)}</div>
+                    ${r.status !== 'pending' && r.reviewer_email ? `<div class="mt-1 text-gray-500">${escapeHtml(r.status === 'cancelled' ? 'Cancelled' : 'Reviewed')} by ${escapeHtml(r.reviewer_email)} · ${escapeHtml(fmt(r.reviewed_at))}${r.review_note ? ` · Note: ${escapeHtml(r.review_note)}` : ''}</div>` : ''}
+                    ${r.status === 'pending' ? `<div class="mt-2 flex justify-end gap-2">
+                        ${isAdminMode() ? `<button type="button" onclick="rejectRequest(${r.id})" class="bg-red-50 text-red-700 hover:bg-red-100 px-3 py-1.5 rounded font-semibold cursor-pointer"><i class="fa-solid fa-xmark mr-1"></i>Reject</button>
+                                           <button type="button" onclick="approveRequest(${r.id})" class="bg-emerald-600 text-white hover:bg-emerald-500 px-3 py-1.5 rounded font-semibold cursor-pointer"><i class="fa-solid fa-check mr-1"></i>Approve</button>`
+                                        : (mine(r) ? `<button type="button" onclick="cancelRequest(${r.id})" class="bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded cursor-pointer">Cancel request</button>` : '')}
+                    </div>` : ''}
+                </div>`).join('') : `<div class="text-center text-gray-500 py-8">${window.requestsTab === 'pending' ? 'No pending requests.' : 'No past requests.'}</div>`;
+        }
+
+        async function setRequestStatus(r, status, note) {
+            let q = supabaseClient.from('change_requests').update({ status, review_note: note || null }).eq('id', r.id).eq('status', 'pending');
+            const { error } = await q;
+            if (error) { alert('Could not update the request: ' + error.message); return false; }
+            return true;
+        }
+        window.approveRequest = async function(id) {
+            if (!isAdminMode()) return;
+            const r = window.requests.find(x => x.id === id);
+            if (!r || r.status !== 'pending') return;
+            if (!confirm(`Approve this request?\n\n${r.summary}`)) return;
+            const res = await applyChange(r.kind, r.payload || {});
+            if (!res.ok) { alert('Could not apply: ' + res.msg + '\nYou can reject this request.'); return; }
+            if (!res.handled) { recalculateAllEmployeeIDs(); populateDropdowns(); renderTable(); await syncNow(); }
+            if (await setRequestStatus(r, 'approved')) {
+                logAudit('approve_request', r.target, { kind: r.kind, summary: r.summary, requester: r.requester_email });
+                loadRequests();
+            }
+        };
+        window.rejectRequest = async function(id) {
+            if (!isAdminMode()) return;
+            const r = window.requests.find(x => x.id === id);
+            if (!r || r.status !== 'pending') return;
+            const note = prompt(`Reject this request?\n\n${r.summary}\n\nReason (optional):`, '');
+            if (note === null) return;
+            if (await setRequestStatus(r, 'rejected', note.trim())) {
+                logAudit('reject_request', r.target, { kind: r.kind, summary: r.summary, requester: r.requester_email, note: note.trim() });
+                loadRequests();
+            }
+        };
+        window.cancelRequest = async function(id) {
+            const r = window.requests.find(x => x.id === id);
+            if (!r || r.status !== 'pending' || !confirm('Cancel this request?')) return;
+            if (await setRequestStatus(r, 'cancelled')) { logAudit('cancel_request', r.target, { kind: r.kind, summary: r.summary }); loadRequests(); }
+        };
 
         // ---------------- Audit trail ----------------
         // Who and when are filled in by the database (auth user), so they cannot be faked from the page.
@@ -925,7 +1118,8 @@
             edit_licensing: 'Edited licensing results', add_attendance: 'Added attendance', remove_attendance: 'Removed attendance',
             add_option: 'Added list option', remove_option: 'Removed list option', edit_settings: 'Changed settings',
             edit_certificate: 'Changed certificate settings', edit_signer: 'Changed signer', print_certificate: 'Printed certificate',
-            print_transcript: 'Printed transcript', export_excel: 'Exported Excel'
+            print_transcript: 'Printed transcript', export_excel: 'Exported Excel',
+            request_change: 'Requested a change', approve_request: 'Approved request', reject_request: 'Rejected request', cancel_request: 'Cancelled request'
         };
 
         window.openAuditLog = async function() {
@@ -982,7 +1176,8 @@
             } else if (window.authUser) {
                 const role = isAdminMode() ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-amber-500 text-[10px] font-bold text-white">ADMIN</span>'
                                            : '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-sky-600 text-[10px] font-bold text-white">USER</span>';
-                el.innerHTML = `<span class="text-[13px] text-blue-100 bg-blue-950 border border-blue-800 px-3 py-2 rounded-lg whitespace-nowrap flex items-center" title="${escapeHtml(window.authUser.email)}"><i class="fa-solid fa-user"></i><span class="hidden min-[1440px]:inline-block ml-1.5 max-w-[260px] truncate align-bottom">${escapeHtml(window.authUser.email)}</span>${role}</span>
+                const inbox = `<button type="button" onclick="openRequests()" title="${isAdminMode() ? 'Approvals' : 'My requests'}" class="relative bg-blue-950 hover:bg-blue-800 border border-blue-800 text-white px-3 py-2 rounded-lg text-[13px] cursor-pointer"><i class="fa-solid fa-inbox"></i><span id="requestBadge" class="hidden absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-[10px] font-bold leading-[18px] text-center"></span></button>`;
+                el.innerHTML = inbox + `<span class="text-[13px] text-blue-100 bg-blue-950 border border-blue-800 px-3 py-2 rounded-lg whitespace-nowrap flex items-center" title="${escapeHtml(window.authUser.email)}"><i class="fa-solid fa-user"></i><span class="hidden min-[1440px]:inline-block ml-1.5 max-w-[260px] truncate align-bottom">${escapeHtml(window.authUser.email)}</span>${role}</span>
                     <button type="button" onclick="logout()" class="bg-blue-950 hover:bg-red-700 border border-blue-800 text-white px-3.5 py-2 rounded-lg text-[13px] font-medium cursor-pointer whitespace-nowrap"><i class="fa-solid fa-right-from-bracket mr-1"></i>Log out</button>`;
             } else {
                 el.innerHTML = '';
@@ -1051,6 +1246,7 @@
             showLoginScreen(false);
             setPortalMode(role === 'admin' ? 'admin' : 'public');
             await loadData();
+            loadRequests();
         }
 
         async function initAuth() {
@@ -1170,6 +1366,7 @@
         function normalizeEmployeesData() {
             if (!Array.isArray(window.employees)) return;
             window.employees.forEach(emp => {
+                if (!emp.uid) emp.uid = newUid();
                 if (!emp.sales) emp.sales = {};
                 if (!emp.development) emp.development = {};
                 if (!emp.agency) emp.agency = {};
@@ -1344,6 +1541,7 @@
             window.rtChannel = supabaseClient.channel('training-db-live')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'trainings' }, scheduleRemoteReload)
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, scheduleRemoteReload)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'change_requests' }, scheduleRequestsReload)
                 .subscribe(status => {
                     window.realtimeLive = (status === 'SUBSCRIBED');
                     setSyncStatus(window.realtimeLive ? 'live' : 'saved', isAdminMode() ? '' : 'View only');
@@ -1799,6 +1997,12 @@
         // rows[0] = header row, the rest = one attendance record per row
         async function importRows(rows, fileName = '') {
             if (!rows || rows.length < 2) { alert("The file contains no data rows."); return; }
+            if (supabaseClient && !isAdminMode()) {   // user: send the file contents for approval
+                if (rows.length > 5001) { alert('This file has more than 5,000 rows. Please split it into smaller files.'); return; }
+                const cleaned = rows.map(r => r.map(c => String(c ?? '')));
+                submitChange('import_file', fileName || 'file', `Import ${fileName || 'file'} (${rows.length - 1} row${rows.length === 2 ? '' : 's'})`, { fileName, rows: cleaned });
+                return;
+            }
 
             const headers = rows[0].map(h => String(h).toLowerCase().replace(/\s+/g, ' ').trim());
             // exact header match first, then "contains"; skip headers containing an excluded word
@@ -2097,7 +2301,8 @@
         };
 
         window.openLicensingModal = function(idx) {
-            if (window.portalMode !== 'admin') return;
+            if (!canEditData()) return;
+            document.getElementById('licSubmitBtn').textContent = isAdminMode() ? 'Save' : 'Send for approval';
             const emp = window.employees[idx];
             if (!emp) return;
             window.activeLicEmpIndex = idx;
@@ -2114,9 +2319,18 @@
 
         window.saveLicensingModal = function() {
             const emp = window.employees[window.activeLicEmpIndex];
-            if (!emp || window.portalMode !== 'admin') return;
+            if (!emp || !canEditData()) return;
             // The form is the full record: clearing a field removes it
             const val = id => document.getElementById(id).value.trim();
+            if (!isAdminMode()) {
+                const form = { 'Batch': val('licBatch'), 'Pre Test Mark': val('licPreMark'), 'Pre Test Status': val('licPreStatus'), 'NIIM Exam Mark': val('licNiimMark'), 'NIIM Exam Status': val('licNiimStatus') };
+                const cur = emp.licensing || {};
+                const changes = LIC_FIELDS.filter(k => (cur[k] || '') !== form[k]).map(k => ({ field: k, from: cur[k] || '', to: form[k] }));
+                if (!changes.length) { alert('Nothing was changed.'); return; }
+                submitChange('edit_licensing', `${emp.EmpID} ${emp.Name}`, `Licensing results for ${emp.Name} (${emp.EmpID}): ` + changes.map(c => `${c.field} ${c.from || '-'} → ${c.to || '-'}`).join('; '),
+                    { target: targetOf(emp), changes }).then(ok => { if (ok) closeLicensingModal(); });
+                return;
+            }
             const beforeLic = Object.assign({}, emp.licensing || {});
             emp.licensing = Object.assign({}, emp.licensing || {}, {
                 'Batch': val('licBatch'),
@@ -2203,10 +2417,15 @@
                     return `<tr class="hover:bg-blue-50/50">${r}</tr>`;
                 }).join('');
             } else if (window.currentTab === 'identification') {
-                thead.innerHTML = `<tr><th class="px-4 py-3">ID Code</th><th class="px-4 py-3">Name</th><th class="px-4 py-3">Position</th><th class="px-4 py-3">Department</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Branch</th><th class="px-4 py-3">NRC</th><th class="px-4 py-3">Remark</th>${window.portalMode === 'admin' ? '<th class="px-4 py-3 text-center">Actions</th>' : ''}</tr>`;
+                thead.innerHTML = `<tr><th class="px-4 py-3">ID Code</th><th class="px-4 py-3">Name</th><th class="px-4 py-3">Position</th><th class="px-4 py-3">Department</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Branch</th><th class="px-4 py-3">NRC</th><th class="px-4 py-3">Remark</th>${canEditData() ? '<th class="px-4 py-3 text-center">Actions</th>' : ''}</tr>`;
                 tbody.innerHTML = filtered.map(emp => {
                     const idx = window.employees.indexOf(emp);
                     let actionsHtml = '';
+                    if (!isAdminMode() && canEditData()) {
+                        actionsHtml = `
+                            <button type="button" onclick="openEditEmployeeModal(${idx})" class="text-blue-600 bg-blue-50 px-2 py-1 rounded text-xs font-semibold cursor-pointer" title="Request a change">Edit</button>
+                            <button type="button" onclick="deleteEmployee(${idx})" class="text-red-700 bg-red-100 px-2 py-1 rounded text-xs font-bold cursor-pointer" title="Request deletion">DEL</button>`;
+                    }
                     if (window.portalMode === 'admin') {
                         actionsHtml = `
                             <button type="button" onclick="openAgentCertModal(${idx})" class="text-sky-700 bg-sky-50 px-2 py-1 rounded text-xs font-semibold cursor-pointer">Agent Cert</button>
@@ -2225,7 +2444,7 @@
                             <td class="px-4 py-3">${emp.BranchName || '-'}</td>
                             <td class="px-4 py-3 font-mono text-xs">${emp.NRC}</td>
                             <td class="px-4 py-3 text-xs">${statusBadge(emp)}${emp.Remark ? `<div class="text-gray-500 mt-0.5">${escapeHtml(emp.Remark)}</div>` : ''}</td>
-                            ${window.portalMode === 'admin' ? `<td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">${actionsHtml}</td>` : ''}
+                            ${canEditData() ? `<td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">${actionsHtml}</td>` : ''}
                         </tr>
                     `;
                 }).join('');
@@ -2243,7 +2462,7 @@
                 activeModules = getModulesFor(catKey, activeModules);
 
                 const isLic = catKey === 'licensingAtt';
-                const canEdit = window.portalMode === 'admin';
+                const canEdit = canEditData();
                 let topRow = `<tr>
                     <th colspan="6" class="px-3 py-2 bg-blue-800 text-white text-center border-r border-blue-700">Identification</th>
                     ${isLic ? `<th class="px-3 py-2 bg-purple-900 text-white text-center border-r">Batch</th>` : ''}
@@ -2848,6 +3067,7 @@
             document.getElementById('employeeModalTitle').innerText = "Add New Employee";
             document.getElementById('editIndex').value = "-1";
             document.getElementById('employeeForm').reset();
+            document.getElementById('empSubmitBtn').textContent = isAdminMode() ? 'Save Employee' : 'Send for approval';
             document.getElementById('employeeModal').classList.remove('hidden');
         };
 
@@ -2865,6 +3085,7 @@
             document.getElementById('empBranch').value = emp.BranchName || '';
             document.getElementById('empStatus').value = emp.Status === 'Resigned' ? 'Resigned' : 'Active';
             document.getElementById('empRemark').value = emp.Remark || '';
+            document.getElementById('empSubmitBtn').textContent = isAdminMode() ? 'Save Employee' : 'Send for approval';
             document.getElementById('employeeModal').classList.remove('hidden');
         };
         window.closeEmployeeModal = function() { document.getElementById('employeeModal').classList.add('hidden'); };
@@ -2877,8 +3098,27 @@
             const nameVal = document.getElementById('empName').value.trim();
             const rawNrc = document.getElementById('empNRC').value;
 
-            const FIELDS = ['Name', 'NRC', 'Position', 'PhoneNumber', 'Department', 'InternalExternal', 'Region', 'BranchName', 'Status', 'Remark'];
+            const FIELDS = EMP_FIELDS;
             const before = index !== -1 ? Object.fromEntries(FIELDS.map(k => [k, window.employees[index][k] || ''])) : null;
+            if (!isAdminMode()) {   // user: send a request instead of saving
+                const form = {
+                    Name: nameVal, NRC: (rawNrc || '').trim(), Position: document.getElementById('empPosition').value,
+                    PhoneNumber: document.getElementById('empPhone').value, Department: dept, InternalExternal: ie,
+                    Region: document.getElementById('empRegion').value, BranchName: document.getElementById('empBranch').value,
+                    Status: document.getElementById('empStatus').value, Remark: document.getElementById('empRemark').value.trim()
+                };
+                if (index !== -1) {
+                    const emp = window.employees[index];
+                    const changes = FIELDS.filter(k => String(before[k]) !== String(form[k] || '')).map(k => ({ field: k, from: String(before[k]), to: String(form[k] || '') }));
+                    if (!changes.length) { alert('Nothing was changed.'); return; }
+                    submitChange('edit_employee', `${emp.EmpID} ${emp.Name}`, `Edit ${emp.Name} (${emp.EmpID}): ` + changes.map(c => `${c.field} ${c.from || '-'} → ${c.to || '-'}`).join('; '),
+                        { target: targetOf(emp), changes }).then(ok => { if (ok) closeEmployeeModal(); });
+                } else {
+                    submitChange('add_employee', form.Name, `Add ${form.Name} (${form.NRC || 'no NRC'}, ${form.Department || '-'})`, { record: form })
+                        .then(ok => { if (ok) closeEmployeeModal(); });
+                }
+                return;
+            }
             if (index !== -1) {
                 let emp = window.employees[index];
                 emp.Name = nameVal;
@@ -2922,7 +3162,12 @@
 
         window.deleteEmployee = function(index) {
             const emp = window.employees[index];
-            if (!emp || !isAdminMode()) return;
+            if (!emp || !canEditData()) return;
+            if (!isAdminMode()) {
+                if (!confirm(`Ask an admin to delete ${emp.Name} (${emp.EmpID})?`)) return;
+                submitChange('delete_employee', `${emp.EmpID} ${emp.Name}`, `Delete ${emp.Name} (${emp.EmpID}, ${emp.NRC || 'no NRC'})`, { target: targetOf(emp) });
+                return;
+            }
             if (!confirm(`Delete ${emp.Name} (${emp.EmpID})? All of this person's training records will be removed.`)) return;
             logAudit('delete_employee', `${emp.EmpID} ${emp.Name}`, { NRC: emp.NRC, Department: emp.Department, sessions: attendanceTotal(emp) });
             window.employees.splice(index, 1);
@@ -2939,7 +3184,7 @@
             document.getElementById('attModalSubtitle').innerText = `Employee: ${emp.Name} (${emp.EmpID})`;
             
             const editSec = document.getElementById('attendanceEditSection');
-            if (editSec) editSec.style.display = window.portalMode === 'admin' ? 'block' : 'none';
+            if (editSec) editSec.style.display = canEditData() ? 'block' : 'none';
 
             renderAttendanceDatesList();
             document.getElementById('attendanceModal').classList.remove('hidden');
@@ -2960,16 +3205,22 @@
             listEl.innerHTML = dates.map((dStr, idx) => `
                 <div class="flex justify-between items-center bg-gray-50 border px-3 py-1.5 rounded-md text-xs">
                     <span class="font-medium text-gray-700">${dStr}</span>
-                    ${window.portalMode === 'admin' ? `<button type="button" onclick="removeAttendanceDate(${idx})" class="text-red-500 font-bold px-1 cursor-pointer">&times;</button>` : ''}
+                    ${canEditData() ? `<button type="button" onclick="removeAttendanceDate(${idx})" class="text-red-500 font-bold px-1 cursor-pointer">&times;</button>` : ''}
                 </div>
             `).join('');
         }
 
         window.addAttendanceDate = function() {
-            if (window.activeAttEmpIndex === null || window.portalMode !== 'admin') return;
+            if (window.activeAttEmpIndex === null || !canEditData()) return;
             const dVal = document.getElementById('attendanceDateInput').value;
             if (!dVal) return;
             const emp = window.employees[window.activeAttEmpIndex];
+            if (!isAdminMode()) {
+                if (((emp[window.activeAttCategory] || {})[window.activeAttModule] || []).includes(dVal)) { alert('This date is already recorded.'); return; }
+                submitChange('add_attendance', `${emp.EmpID} ${emp.Name}`, `Add attendance for ${emp.Name} (${emp.EmpID}): ${programLabel(window.activeAttCategory)} – ${window.activeAttModule} on ${dVal}`,
+                    { target: targetOf(emp), cat: window.activeAttCategory, mod: window.activeAttModule, date: dVal });
+                return;
+            }
             if (!emp[window.activeAttCategory]) emp[window.activeAttCategory] = {};
             if (!emp[window.activeAttCategory][window.activeAttModule]) emp[window.activeAttCategory][window.activeAttModule] = [];
             if (!emp[window.activeAttCategory][window.activeAttModule].includes(dVal)) {
@@ -2981,9 +3232,15 @@
         };
 
         window.removeAttendanceDate = function(idx) {
-            if (window.activeAttEmpIndex === null || window.portalMode !== 'admin') return;
+            if (window.activeAttEmpIndex === null || !canEditData()) return;
             const emp = window.employees[window.activeAttEmpIndex];
             const removedDate = emp[window.activeAttCategory][window.activeAttModule][idx];
+            if (!isAdminMode()) {
+                if (!confirm(`Ask an admin to remove ${removedDate}?`)) return;
+                submitChange('remove_attendance', `${emp.EmpID} ${emp.Name}`, `Remove attendance for ${emp.Name} (${emp.EmpID}): ${programLabel(window.activeAttCategory)} – ${window.activeAttModule} on ${removedDate}`,
+                    { target: targetOf(emp), cat: window.activeAttCategory, mod: window.activeAttModule, date: removedDate });
+                return;
+            }
             logAudit('remove_attendance', `${emp.EmpID} ${emp.Name}`, { program: window.activeAttCategory, session: window.activeAttModule, date: removedDate });
             emp[window.activeAttCategory][window.activeAttModule].splice(idx, 1);
             saveData(); renderAttendanceDatesList();
