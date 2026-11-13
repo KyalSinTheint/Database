@@ -373,7 +373,7 @@
 
             <!-- 3. Certificate text and template -->
             <details class="no-print bg-gray-50 border rounded-lg px-3 py-2 mb-2 text-xs">
-                <summary class="cursor-pointer font-semibold text-gray-700"><i class="fa-solid fa-pen-to-square mr-1 text-gray-400"></i>Edit certificate text &amp; template</summary>
+                <summary class="cursor-pointer font-semibold text-gray-700"><i class="fa-solid fa-pen-to-square mr-1 text-gray-400"></i>Edit certificate text &amp; template image</summary>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3">
                     <label>Title<input type="text" id="certTxtTitle" oninput="renderAgentCert()" class="w-full mt-0.5 px-2 py-1.5 border rounded"></label>
                     <label>Line above the name<input type="text" id="certTxtSubtitle" oninput="renderAgentCert()" class="w-full mt-0.5 px-2 py-1.5 border rounded"></label>
@@ -384,13 +384,14 @@
                 <div class="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t">
                     <span class="font-semibold text-gray-600">Template image:</span>
                     <span id="certTemplateName" class="text-gray-500"></span>
-                    <label class="bg-white border px-2.5 py-1 rounded cursor-pointer hover:bg-gray-100"><i class="fa-solid fa-image mr-1"></i>Upload new template<input type="file" accept="image/*" onchange="uploadCertTemplate(event)" class="hidden"></label>
+                    <label class="bg-white border px-2.5 py-1 rounded cursor-pointer hover:bg-gray-100"><i class="fa-solid fa-image mr-1"></i>Replace template<input type="file" accept="image/*" onchange="uploadCertTemplate(event)" class="hidden"></label>
                     <button type="button" onclick="useDefaultCertTemplate()" class="bg-white border px-2.5 py-1 rounded cursor-pointer hover:bg-gray-100">Use default template</button>
+                    <button type="button" id="certRestoreTplBtn" onclick="restorePreviousCertTemplate()" class="hidden bg-white border px-2.5 py-1 rounded cursor-pointer hover:bg-gray-100"><i class="fa-solid fa-rotate-left mr-1"></i>Restore previous</button>
                 </div>
-                <p class="text-gray-500 mt-1">Tip: if your template already has its own wording, clear the matching lines above so they are not printed twice.</p>
+                <p class="text-gray-500 mt-1">A new image replaces the current template for everyone straight away. If your template already has its own wording, clear the matching lines above so they are not printed twice.</p>
                 <div class="flex flex-wrap justify-end gap-2 mt-3">
                     <button type="button" onclick="resetCertTexts()" class="text-gray-500 underline cursor-pointer">Reset text to default</button>
-                    <button type="button" onclick="saveCertDefaults()" class="bg-sky-600 text-white px-3 py-1 rounded font-semibold cursor-pointer">Save text &amp; template for everyone</button>
+                    <button type="button" onclick="saveCertDefaults()" class="bg-sky-600 text-white px-3 py-1 rounded font-semibold cursor-pointer">Save text for everyone</button>
                 </div>
             </details>
 
@@ -583,6 +584,7 @@
                     <label class="block text-xs font-semibold uppercase text-gray-700 mb-1">Financial year starts in</label>
                     <select id="fyStartMonthSelect" onchange="setFyStartMonth(this.value)" class="w-full px-3 py-1.5 border rounded-lg text-sm bg-white cursor-pointer"></select>
                     <p class="text-[11px] text-gray-500 mt-1">April = FY April to March (e.g. FY 2026-27). January = calendar year (e.g. 2026).</p>
+                    <div id="fyHiddenList" class="mt-2 text-xs"></div>
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase text-gray-700 mb-1">Branch Names</label>
@@ -1403,6 +1405,10 @@
         }
 
         function renderFyStartSelect() {
+            const hl = document.getElementById('fyHiddenList');
+            const hidden = ((window.dropdownOptions || {}).fyHidden || []).map(Number);
+            if (hl) hl.innerHTML = hidden.length ? '<span class="text-gray-600 font-semibold mr-1">Removed year tabs:</span>' + hidden.map(y =>
+                `<span class="inline-flex items-center gap-1 px-2 py-0.5 mr-1 mb-1 bg-gray-100 border rounded">${fyRange(y).label}${isAdminMode() ? ` <button type="button" onclick="restoreFyYear(${y})" class="text-blue-700 underline cursor-pointer">restore</button>` : ''}</span>`).join('') : '';
             const sel = document.getElementById('fyStartMonthSelect');
             if (!sel) return;
             sel.innerHTML = MONTHS.map((m, i) => `<option value="${i + 1}">${m}</option>`).join('');
@@ -1497,13 +1503,19 @@
                 Object.values(emp[c] || {}).forEach(arr => (Array.isArray(arr) ? arr : []).forEach(d => { const y = fyOf(d); if (y !== null && y < first && y > 1990) first = y; }))));
             const extra = +(window.dropdownOptions || {}).fyExtraYears || 0;
             const last = cur + 1 + extra;   // always offer next year
-            const sel = window.selectedFy === undefined ? cur : window.selectedFy;
+            const hidden = new Set(((window.dropdownOptions || {}).fyHidden || []).map(Number));
+            let sel = window.selectedFy === undefined ? (hidden.has(cur) ? null : cur) : window.selectedFy;
+            if (sel !== null && hidden.has(sel)) sel = null;
             window.activePeriod = sel === null ? null : fyRange(sel);
-            const btn = (val, text, active, title = '') => `<button type="button" onclick="selectFy(${val})" title="${title}" class="px-3 py-1 rounded-full text-xs font-semibold border cursor-pointer ${active ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50'}">${text}</button>`;
+            const admin = isAdminMode();
+            const btn = (val, text, active, title = '', removable = false) => `<span class="inline-flex items-center rounded-full border text-xs font-semibold ${active ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-300'}">
+                <button type="button" onclick="selectFy(${val})" title="${title}" class="pl-3 ${removable ? 'pr-1.5' : 'pr-3'} py-1 rounded-full cursor-pointer ${active ? '' : 'hover:bg-blue-50'}">${text}</button>
+                ${removable ? `<button type="button" onclick="removeFyYear(${val})" title="Remove this financial year tab" class="pr-2 pl-0.5 py-1 opacity-60 hover:opacity-100 cursor-pointer">&times;</button>` : ''}</span>`;
             let html = btn('null', 'All years', sel === null);
             for (let y = first; y <= last; y++) {
+                if (hidden.has(y)) continue;
                 const r = fyRange(y);
-                html += btn(y, r.label + (y === cur ? ' <span class="opacity-75 font-normal">(current)</span>' : ''), sel === y, `${shortDate(r.from)} – ${shortDate(r.to)}`);
+                html += btn(y, r.label + (y === cur ? ' <span class="opacity-75 font-normal">(current)</span>' : ''), sel === y, `${shortDate(r.from)} – ${shortDate(r.to)}`, admin);
             }
             if (isAdminMode()) html += `<button type="button" onclick="addFyYear()" title="Add the next financial year" class="px-2.5 py-1 rounded-full text-xs font-semibold border border-dashed border-gray-400 text-gray-600 hover:bg-gray-50 cursor-pointer">+ Next year</button>`;
             el.innerHTML = html;
@@ -1512,8 +1524,31 @@
         window.selectFy = function(y) { window.selectedFy = y; renderTable(); };
         window.addFyYear = function() {
             if (!isAdminMode()) return;
-            window.dropdownOptions.fyExtraYears = (+window.dropdownOptions.fyExtraYears || 0) + 1;
+            const hidden = (window.dropdownOptions.fyHidden || []).map(Number);
+            const cur = currentFyYear();
+            const last = cur + 1 + (+window.dropdownOptions.fyExtraYears || 0);
+            // bring back a removed future year first, otherwise add one more year
+            const back = hidden.filter(y => y > cur && y <= last).sort((a, b) => a - b)[0];
+            if (back !== undefined) window.dropdownOptions.fyHidden = hidden.filter(y => y !== back);
+            else window.dropdownOptions.fyExtraYears = (+window.dropdownOptions.fyExtraYears || 0) + 1;
             saveData(); renderTable();
+        };
+        // Removes the tab only; training records of that year are kept (still in "All years")
+        window.removeFyYear = function(y) {
+            if (!isAdminMode()) return;
+            const r = fyRange(y);
+            if (!confirm(`Remove the ${r.label} tab?\n\nTraining records in this year are NOT deleted; they still show under "All years". You can bring the tab back in Settings.`)) return;
+            const hidden = new Set((window.dropdownOptions.fyHidden || []).map(Number)); hidden.add(+y);
+            window.dropdownOptions.fyHidden = [...hidden].sort((a, b) => a - b);
+            if (window.selectedFy === y || (window.selectedFy === undefined && y === currentFyYear())) window.selectedFy = undefined;
+            logAudit('edit_settings', 'Removed financial year tab', { year: r.label });
+            saveData(); renderTable(); renderSettingsLists();
+        };
+        window.restoreFyYear = function(y) {
+            if (!isAdminMode()) return;
+            window.dropdownOptions.fyHidden = (window.dropdownOptions.fyHidden || []).map(Number).filter(v => v !== +y);
+            logAudit('edit_settings', 'Restored financial year tab', { year: fyRange(+y).label });
+            saveData(); renderTable(); renderSettingsLists();
         };
         window.setFyStartMonth = function(m) {
             if (!isAdminMode()) return;
@@ -2447,6 +2482,7 @@
             cv.style.setProperty('--ar', `${w} / ${h}`);
             cv.style.setProperty('--ar-num', String(w / h));
             document.getElementById('certTemplateName').textContent = t ? `Custom (${w}×${h})` : 'Default';
+            document.getElementById('certRestoreTplBtn').classList.toggle('hidden', !('previousTemplate' in (window.certSettings || {})));
             // signer
             const sg = getCertSigner();
             document.getElementById('agentCertSignImg').src = sg.signature || DEFAULT_SIGNATURE_SRC;
@@ -2508,15 +2544,31 @@
                     const ctx = c.getContext('2d');
                     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
                     ctx.drawImage(img, 0, 0, c.width, c.height);
-                    window.pendingTemplate = { src: c.toDataURL('image/jpeg', 0.9), w: c.width, h: c.height };
-                    renderAgentCert();
+                    replaceCertTemplate({ src: c.toDataURL('image/jpeg', 0.9), w: c.width, h: c.height }, `new image: ${file.name}`);
                 };
                 img.onerror = () => alert('This file is not a supported image.');
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
         };
-        window.useDefaultCertTemplate = function() { window.pendingTemplate = null; renderAgentCert(); };
+        // Replaces the saved template for everyone right away; the one it replaces is kept for "Restore previous"
+        async function replaceCertTemplate(t, label) {
+            if (!isAdminMode()) return;
+            const current = (window.certSettings || {}).template || null;
+            if (!(await saveCertSettings({ template: t, previousTemplate: current }))) { renderAgentCert(); return; }
+            logAudit('edit_certificate', 'Agent certificate template', { template: label });
+            window.pendingTemplate = undefined;
+            renderAgentCert();
+        }
+        window.useDefaultCertTemplate = function() {
+            if (!(window.certSettings || {}).template) return;   // already the default
+            if (confirm('Replace the current template with the default template?')) replaceCertTemplate(null, 'default');
+        };
+        window.restorePreviousCertTemplate = function() {
+            const cs = window.certSettings || {};
+            if (!('previousTemplate' in cs)) return;
+            if (confirm('Go back to the previous template?')) replaceCertTemplate(cs.previousTemplate || null, 'restored previous');
+        };
 
         window.saveCertDefaults = async function() {
             if (!isAdminMode()) return;
@@ -2525,13 +2577,10 @@
                 line1: document.getElementById('certTxtLine1').value, line2: document.getElementById('certTxtLine2').value,
                 dateLine: document.getElementById('certTxtDate').value
             };
-            const patch = { texts };
-            if (window.pendingTemplate !== undefined) patch.template = window.pendingTemplate;
-            if (await saveCertSettings(patch)) {
-                logAudit('edit_certificate', 'Agent certificate', { texts, template: window.pendingTemplate === undefined ? 'unchanged' : (window.pendingTemplate ? 'custom image' : 'default') });
-                window.pendingTemplate = undefined;
+            if (await saveCertSettings({ texts })) {
+                logAudit('edit_certificate', 'Agent certificate text', { texts });
                 renderAgentCert();
-                alert('Saved. Everyone will now use this text and template.');
+                alert('Saved. Everyone will now use this text.');
             }
         };
 
@@ -2974,7 +3023,7 @@
             saveData(); renderAttendanceDatesList();
         };
 
-        window.openSettingsModal = function() { document.getElementById('settingsModal').classList.remove('hidden'); };
+        window.openSettingsModal = function() { renderSettingsLists(); document.getElementById('settingsModal').classList.remove('hidden'); };
         window.closeSettingsModal = function() { document.getElementById('settingsModal').classList.add('hidden'); };
 
         // Warn before leaving while a cloud save is still pending
