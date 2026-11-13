@@ -374,22 +374,24 @@
             <!-- 3. Design: template image and text boxes -->
             <div class="no-print bg-gray-50 border rounded-lg px-3 py-2 mb-2 text-xs">
                 <div class="flex flex-wrap items-center gap-2">
-                    <span class="font-semibold text-gray-700"><i class="fa-solid fa-pen-ruler mr-1 text-gray-400"></i>Design</span>
-                    <span class="text-gray-500">Template: <b id="certTemplateName"></b></span>
+                    <span class="font-semibold text-gray-700"><i class="fa-solid fa-pen-ruler mr-1 text-gray-400"></i>Template</span>
+                    <select id="certTemplateSelect" onchange="selectCertTemplate(this.value)" class="px-2 py-1 border rounded bg-white text-xs font-semibold cursor-pointer"></select>
+                    <span id="certTemplateName" class="text-gray-500"></span>
                     <span class="flex-1"></span>
-                    <label class="bg-white border px-2.5 py-1 rounded cursor-pointer hover:bg-gray-100"><i class="fa-solid fa-image mr-1"></i>Replace template<input type="file" accept="image/*" onchange="uploadCertTemplate(event)" class="hidden"></label>
-                    <button type="button" onclick="useDefaultCertTemplate()" class="bg-white border px-2.5 py-1 rounded cursor-pointer hover:bg-gray-100">Use default</button>
-                    <button type="button" id="certRestoreTplBtn" onclick="restorePreviousCertTemplate()" class="hidden bg-white border px-2.5 py-1 rounded cursor-pointer hover:bg-gray-100"><i class="fa-solid fa-rotate-left mr-1"></i>Restore previous</button>
+                    <label class="bg-white border px-2.5 py-1 rounded cursor-pointer hover:bg-gray-100"><i class="fa-solid fa-image mr-1"></i>Add new template<input type="file" accept="image/*" onchange="uploadCertTemplate(event)" class="hidden"></label>
+                    <button type="button" id="certDeleteTplBtn" onclick="deleteCertTemplate()" class="hidden bg-white border text-red-700 px-2.5 py-1 rounded cursor-pointer hover:bg-red-50"><i class="fa-solid fa-trash mr-1"></i>Delete template</button>
                     <label class="flex items-center gap-1 bg-sky-50 border border-sky-200 text-sky-800 px-2.5 py-1 rounded cursor-pointer font-semibold"><input type="checkbox" id="certEditToggle" onchange="setCertEditing(this.checked)"> Edit text</label>
                 </div>
                 <div id="certOcrStatus" class="hidden mt-2 text-sky-800 bg-sky-50 border border-sky-200 rounded px-2 py-1.5"></div>
                 <div id="certEditPanel" class="hidden mt-3 pt-3 border-t">
                     <p class="text-gray-500 mb-2">Click a text on the certificate to change it, drag it to move, use the blue corner to resize.
-                        In any text you can use <code>{name}</code>, <code>{from}</code>, <code>{to}</code>, <code>{signer_name}</code>, <code>{signer_title}</code>, <code>{signer_company}</code>.</p>
+                        In any text you can use <code>{name}</code>, <code>{from}</code>, <code>{to}</code>, <code>{signer_name}</code>, <code>{signer_title}</code>, <code>{signer_company}</code>
+                        and for a second signer <code>{signer2_name}</code>, <code>{signer2_title}</code>, <code>{signer2_company}</code>.</p>
                     <div id="certFieldEditor" class="text-gray-500 italic">No text selected.</div>
                     <div class="flex flex-wrap justify-end gap-2 mt-3">
                         <button type="button" onclick="addCertField()" class="bg-white border px-2.5 py-1 rounded cursor-pointer hover:bg-gray-100"><i class="fa-solid fa-plus mr-1"></i>Add text</button>
                         <button type="button" onclick="resetCertLayout()" class="text-gray-500 underline cursor-pointer">Undo unsaved changes</button>
+                        <button type="button" onclick="resetCertToOriginal()" class="text-gray-500 underline cursor-pointer">Back to this template's original text</button>
                         <button type="button" onclick="saveCertDefaults()" class="bg-sky-600 text-white px-3 py-1 rounded font-semibold cursor-pointer">Save design for everyone</button>
                     </div>
                 </div>
@@ -402,15 +404,22 @@
                     <button type="button" id="agentCertSignerEditBtn" onclick="toggleAgentCertSignerEditor(true)" class="text-sky-700 bg-sky-50 hover:bg-sky-100 px-2.5 py-1 rounded font-semibold cursor-pointer"><i class="fa-solid fa-pen mr-1"></i>Edit</button>
                 </div>
                 <div id="agentCertSignerEditor" class="hidden mt-3 grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <div class="md:col-span-3 flex items-center gap-2">
+                        <span class="font-semibold text-gray-600">Edit:</span>
+                        <select id="acSignerSlot" onchange="loadSignerSlot()" class="px-2 py-1 border rounded bg-white cursor-pointer">
+                            <option value="1">Signer 1 (main / left)</option>
+                            <option value="2">Signer 2 (right, used by Template 2)</option>
+                        </select>
+                    </div>
                     <input type="text" id="acSignerNameInput" class="px-2 py-1.5 border rounded" placeholder="Signer name">
                     <input type="text" id="acSignerTitleInput" class="px-2 py-1.5 border rounded" placeholder="Title">
                     <input type="text" id="acSignerCompanyInput" class="px-2 py-1.5 border rounded" placeholder="Company">
                     <div class="md:col-span-3 flex flex-wrap items-center gap-2">
                         <span class="font-semibold text-gray-600">Signature:</span>
                         <img id="acSignerPreview" class="h-10 bg-white border rounded px-2" alt="">
-                        <button type="button" onclick="openSignPad(d => { pendingSignature = d; document.getElementById('acSignerPreview').src = d; })" class="bg-white border px-2.5 py-1 rounded cursor-pointer hover:bg-gray-100"><i class="fa-solid fa-pen-nib mr-1"></i>Draw</button>
+                        <button type="button" onclick="openSignPad(d => { pendingSignature = d; const pv = document.getElementById('acSignerPreview'); pv.src = d; pv.style.display = ''; })" class="bg-white border px-2.5 py-1 rounded cursor-pointer hover:bg-gray-100"><i class="fa-solid fa-pen-nib mr-1"></i>Draw</button>
                         <label class="bg-white border px-2.5 py-1 rounded cursor-pointer hover:bg-gray-100">Upload<input type="file" accept="image/*" onchange="uploadAgentCertSignature(event)" class="hidden"></label>
-                        <button type="button" onclick="useDefaultAgentCertSignature()" class="bg-white border px-2.5 py-1 rounded cursor-pointer hover:bg-gray-100">Use default</button>
+                        <button type="button" onclick="useDefaultAgentCertSignature()" class="bg-white border px-2.5 py-1 rounded cursor-pointer hover:bg-gray-100">Use default / none</button>
                         <span class="flex-1"></span>
                         <button type="button" onclick="resetAgentCertSigner()" class="text-gray-500 underline cursor-pointer">Reset all to default</button>
                         <button type="button" onclick="toggleAgentCertSignerEditor(false)" class="bg-gray-200 px-3 py-1 rounded cursor-pointer">Cancel</button>
@@ -2520,6 +2529,23 @@
             { id: 'rule', type: 'rule', x: 40.8, y: 81.1, w: 17.4, h: 0.6 },
             { id: 'signer', type: 'text', text: '{signer_name}\n{signer_title}\n{signer_company}', x: 25, y: 81.5, w: 50, h: 9.5, size: 1.72, align: 'center', valign: 'top', lh: 1.26 }
         ];
+        // Template 2 (dark blue, two signers); positions measured on the original design
+        const DEFAULT_CERT_FIELDS_2 = [
+            { id: 'title', type: 'text', text: 'KBZ LIFE Insurance In-House Agent Training Center', x: 5, y: 27.56, w: 90, h: 6.2, size: 2.57, bold: true, align: 'center', ls: -0.01 },
+            { id: 'subtitle', type: 'text', text: 'This Certificate is proudly presented to', x: 10, y: 35.08, w: 80, h: 4.6, size: 1.88, italic: true, align: 'center', ws: 0.1 },
+            { id: 'name', type: 'text', text: '{name}', x: 18, y: 41.5, w: 64, h: 9.6, size: 3.0, bold: true, align: 'center', valign: 'bottom' },
+            { id: 'line1', type: 'text', text: 'For Successfully completing the Life Insurance Agent Training Course conducted from', x: 4, y: 54.96, w: 92, h: 4.6, size: 1.63, align: 'center', ws: 0.08 },
+            { id: 'dates', type: 'text', text: '{from} to {to}', x: 14.1, y: 60.2, w: 70, h: 4.6, size: 1.63, align: 'center', ws: 0.08, monthShort: true },
+            { id: 'signature', type: 'signature', slot: 1, x: 12, y: 64.5, w: 20, h: 9.5, align: 'center', valign: 'bottom' },
+            { id: 'signer', type: 'text', text: '{signer_name}\n{signer_title}', x: 8, y: 75.2, w: 28, h: 8, size: 1.45, align: 'center', valign: 'top', lh: 1.35 },
+            { id: 'signature2', type: 'signature', slot: 2, x: 68, y: 64.5, w: 20, h: 9.5, align: 'center', valign: 'bottom' },
+            { id: 'signer2', type: 'text', text: '{signer2_name}\n{signer2_title}', x: 64, y: 75.2, w: 28, h: 8, size: 1.45, align: 'center', valign: 'top', lh: 1.35 }
+        ];
+        const BUILTIN_TEMPLATES = [
+            { id: 'default1', name: 'Template 1 – light blue', builtin: true, template: { src: 'assets/agent-cert-template.jpg', w: 1040, h: 720 }, fields: DEFAULT_CERT_FIELDS },
+            { id: 'default2', name: 'Template 2 – dark blue', builtin: true, template: { src: 'assets/agent-cert-template2.jpg', w: 1754, h: 1241 }, fields: DEFAULT_CERT_FIELDS_2 }
+        ];
+        const DEFAULT_CERT_SIGNER2 = { name: 'Htet Ko Ko Aung', title: 'Head of Learning & Development', company: 'KBZ LIFE Insurance Co., Ltd', signature: '' };
         const clone = o => JSON.parse(JSON.stringify(o));
         const DEFAULT_CERT_TEXTS = {
             title: 'KBZ LIFE Insurance In-House Agent Training Center',
@@ -2541,8 +2567,23 @@
             } else {
                 try { v = JSON.parse(localStorage.getItem('kbz_agent_cert') || 'null'); } catch (e) {}
             }
-            window.certSettings = v || {};
+            const cs = v || {};
+            // older single-template settings become entries of the template list
+            if (cs.template && !Array.isArray(cs.custom)) {
+                cs.custom = [{ id: 'custom-1', name: 'My template', template: cs.template, fields: cs.fields || null, ocrFields: cs.fields || null }];
+                cs.activeId = cs.activeId || 'custom-1';
+            } else if (Array.isArray(cs.fields) && cs.fields.length && !cs.designs) {
+                cs.designs = { default1: { fields: cs.fields } };
+            }
+            window.certSettings = cs;
         }
+        function customCertTemplates() { const cs = window.certSettings || {}; return Array.isArray(cs.custom) ? cs.custom : []; }
+        function allCertTemplates() { return BUILTIN_TEMPLATES.concat(customCertTemplates()); }
+        function activeCertTemplate() {
+            const id = (window.certSettings || {}).activeId;
+            return allCertTemplates().find(t => t.id === id) || BUILTIN_TEMPLATES[0];
+        }
+        function originalCertFields(t) { return clone(t.builtin ? t.fields : (t.ocrFields || t.fields || [])); }
         async function saveCertSettings(patch) {
             const next = Object.assign({}, window.certSettings || {}, patch);
             if (supabaseClient) {
@@ -2557,11 +2598,15 @@
         function getCertSigner() {
             return Object.assign({}, DEFAULT_CERT_SIGNER, (window.dropdownOptions || {}).agentCertSigner || {}, (window.certSettings || {}).signer || {});
         }
+        function getCertSigner2() { return Object.assign({}, DEFAULT_CERT_SIGNER2, (window.certSettings || {}).signer2 || {}); }
         function savedCertTexts() { return Object.assign({}, DEFAULT_CERT_TEXTS, (window.certSettings || {}).texts || {}); }
-        // Saved layout, or the default one (older saved wording is carried over)
+        // Saved layout of the selected template, or its original one (older saved wording is carried over)
         function savedCertFields() {
-            const cs = window.certSettings || {};
-            if (Array.isArray(cs.fields) && cs.fields.length) return clone(cs.fields);
+            const cs = window.certSettings || {}, T = activeCertTemplate();
+            if (!T.builtin) return clone(T.fields || T.ocrFields || []);
+            const d = (cs.designs || {})[T.id];
+            if (d && Array.isArray(d.fields) && d.fields.length) return clone(d.fields);
+            if (T.id !== 'default1' || !cs.texts) return clone(T.fields);
             const t = savedCertTexts(), f = clone(DEFAULT_CERT_FIELDS);
             const set = (id, v) => { const x = f.find(q => q.id === id); if (x) x.text = v; };
             set('title', t.title); set('subtitle', t.subtitle); set('line1', t.line1); set('line2', t.line2); set('dates', t.dateLine);
@@ -2573,11 +2618,11 @@
             if (v >= 11 && v <= 13) return 'th';
             return { 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th';
         }
-        function certDateHtml(iso) {
+        function certDateHtml(iso, shortMonth) {
             const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
             if (!m) return '';
-            const d = +m[3];
-            return `${d}<sup>${ordinal(d)}</sup> ${MONTHS[+m[2] - 1]} ${m[1]}`;
+            const d = +m[3], mon = MONTHS[+m[2] - 1];
+            return `${d}<sup>${ordinal(d)}</sup> ${shortMonth ? mon.slice(0, 3) : mon} ${m[1]}`;
         }
 
         // Dates the person attended: licensing first, else agency, else any program; inside the selected FY when possible
@@ -2651,19 +2696,24 @@
 
         // ----- render -----
         function certFieldContent(f, ctx) {
-            if (f.type === 'signature') return `<img src="${escapeHtml(ctx.signature)}" alt="">`;
+            if (f.type === 'signature') {
+                const src = f.slot === 2 ? ctx.signature2 : ctx.signature;
+                return src ? `<img src="${escapeHtml(src)}" alt="">` : '';
+            }
             if (f.type === 'rule') return '';
             let t = String(f.text || '');
             const hasDates = /\{from\}|\{to\}/.test(t);
             if (hasDates) {
                 if (!ctx.from && !ctx.to) return '';
-                if (!(ctx.from && ctx.to && ctx.from !== ctx.to)) t = t.replace(/from\s*\{from\}\s*to\s*\{to\}/i, 'On {from}').replace('{to}', '');
+                if (!(ctx.from && ctx.to && ctx.from !== ctx.to)) t = t.replace(/from\s*\{from\}\s*to\s*\{to\}/i, 'On {from}').replace(/\{from\}\s*to\s*\{to\}/i, '{from}').replace('{to}', '');
             }
             let h = escapeHtml(t);
             h = h.replace(/\{name\}/g, escapeHtml(ctx.name))
                  .replace(/\{signer_name\}/g, escapeHtml(ctx.signer.name)).replace(/\{signer_title\}/g, escapeHtml(ctx.signer.title))
                  .replace(/\{signer_company\}/g, escapeHtml(ctx.signer.company))
-                 .replace(/\{from\}/g, certDateHtml(ctx.from || ctx.to)).replace(/\{to\}/g, certDateHtml(ctx.to || ctx.from));
+                 .replace(/\{signer2_name\}/g, escapeHtml(ctx.signer2.name)).replace(/\{signer2_title\}/g, escapeHtml(ctx.signer2.title))
+                 .replace(/\{signer2_company\}/g, escapeHtml(ctx.signer2.company))
+                 .replace(/\{from\}/g, certDateHtml(ctx.from || ctx.to, f.monthShort)).replace(/\{to\}/g, certDateHtml(ctx.to || ctx.from, f.monthShort));
             return `<span>${h}</span>`;
         }
         function certFieldStyle(f) {
@@ -2682,23 +2732,28 @@
             const v = id => document.getElementById(id).value;
             let from = v('agentCertFrom'), to = v('agentCertTo');
             if (from && to && from > to) [from, to] = [to, from];
-            const sg = getCertSigner();
-            const ctx = { name: v('agentCertNameInput').trim(), from, to, signer: sg, signature: sg.signature || DEFAULT_SIGNATURE_SRC };
+            const sg = getCertSigner(), sg2 = getCertSigner2();
+            const ctx = { name: v('agentCertNameInput').trim(), from, to, signer: sg, signature: sg.signature || DEFAULT_SIGNATURE_SRC, signer2: sg2, signature2: sg2.signature || '' };
             if (!window.certFields) window.certFields = savedCertFields();
             const editing = document.getElementById('agentCertCanvas').classList.contains('editing');
             document.getElementById('agentCertFields').innerHTML = window.certFields.map((f, i) =>
                 `<div class="cf ${f.type === 'rule' ? 'cf-rule' : ''} ${editing && i === window.certSel ? 'sel' : ''}" data-i="${i}" style="${certFieldStyle(f)}">${certFieldContent(f, ctx)}<div class="cf-handle no-print" data-i="${i}"></div></div>`).join('');
             // template image
-            const t = (window.certSettings || {}).template || null;
+            const T = activeCertTemplate(), t = T.template;
             const bg = document.getElementById('agentCertBg');
             composeTemplate(t, window.certFields, src => { if (bg.getAttribute('src') !== src) bg.src = src; });
-            const w = t ? t.w : 1040, h = t ? t.h : 720;
+            const w = t.w, h = t.h;
             const cv = document.getElementById('agentCertCanvas');
             cv.style.setProperty('--ar', `${w} / ${h}`);
             cv.style.setProperty('--ar-num', String(w / h));
-            document.getElementById('certTemplateName').textContent = t ? `Custom (${w}×${h})` : 'Default';
-            document.getElementById('certRestoreTplBtn').classList.toggle('hidden', !('previousTemplate' in (window.certSettings || {})));
-            document.getElementById('agentCertSignerSummary').textContent = [sg.name, sg.title].filter(Boolean).join(', ');
+            const sel = document.getElementById('certTemplateSelect');
+            const opts = allCertTemplates().map(x => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.name)}</option>`).join('');
+            if (sel.dataset.opts !== opts) { sel.innerHTML = opts; sel.dataset.opts = opts; }
+            sel.value = T.id;
+            document.getElementById('certTemplateName').textContent = `${w}×${h}`;
+            document.getElementById('certDeleteTplBtn').classList.toggle('hidden', !!T.builtin);
+            const usesSigner2 = window.certFields.some(f => (f.type === 'signature' && f.slot === 2) || /\{signer2_/.test(f.text || ''));
+            document.getElementById('agentCertSignerSummary').textContent = [sg.name, sg.title].filter(Boolean).join(', ') + (usesSigner2 ? `  ·  ${[sg2.name, sg2.title].filter(Boolean).join(', ') || '(signer 2 not set)'}` : '');
         };
 
         // Original template + paint over the text areas that are now text boxes.
@@ -2706,7 +2761,7 @@
         let composeCache = { key: null, url: null };
         function composeTemplate(t, fields, done) {
             if (!t) { done(DEFAULT_TEMPLATE_SRC); return Promise.resolve(); }
-            if (!t.orig) { done(t.src); return Promise.resolve(); }
+            if (!t.orig) { done(t.src || DEFAULT_TEMPLATE_SRC); return Promise.resolve(); }
             const rects = (fields || []).filter(f => Array.isArray(f.erase)).map(f => f.erase);
             const key = t.orig.length + ':' + t.orig.slice(-40) + ':' + JSON.stringify(rects);
             if (composeCache.key === key) { done(composeCache.url); return Promise.resolve(); }
@@ -2770,7 +2825,10 @@
                 <label>Colour<input type="color" id="cfColor" value="${f.color || '#111111'}" class="w-full mt-0.5 h-[30px] border rounded"></label>
                 <label>Align<select id="cfAlign" class="w-full mt-0.5 px-2 py-1 border rounded bg-white">${['left', 'center', 'right'].map(a => `<option ${f.align === a ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
                 <label class="flex items-center gap-1 pb-1.5"><input type="checkbox" id="cfBold" ${f.bold ? 'checked' : ''}> <b>Bold</b></label>
-                <label class="flex items-center gap-1 pb-1.5"><input type="checkbox" id="cfItalic" ${f.italic ? 'checked' : ''}> <i>Italic</i></label>` : `<div class="md:col-span-5 font-semibold">${kind}</div>`}
+                <label class="flex items-center gap-1 pb-1.5"><input type="checkbox" id="cfItalic" ${f.italic ? 'checked' : ''}> <i>Italic</i></label>
+                ${/\{from\}|\{to\}/.test(f.text || '') ? `<label class="flex items-center gap-1 pb-1.5 md:col-span-2"><input type="checkbox" id="cfShort" ${f.monthShort ? 'checked' : ''}> Short month (Oct)</label>` : ''}`
+                : f.type === 'signature' ? `<div class="md:col-span-2 font-semibold">${kind}</div><label class="md:col-span-3">Whose signature<select id="cfSlot" class="w-full mt-0.5 px-2 py-1 border rounded bg-white"><option value="1" ${f.slot !== 2 ? 'selected' : ''}>Signer 1</option><option value="2" ${f.slot === 2 ? 'selected' : ''}>Signer 2</option></select></label>`
+                : `<div class="md:col-span-5 font-semibold">${kind}</div>`}
                 <button type="button" onclick="deleteCertField()" title="${f.erase ? 'Removes the text box and shows the original image again in this spot' : 'Removes this text box'}" class="bg-red-50 text-red-700 hover:bg-red-100 px-2.5 py-1.5 rounded cursor-pointer"><i class="fa-solid fa-trash mr-1"></i>${f.erase ? 'Remove (show original image)' : 'Remove'}</button>
             </div>`;
             const bind = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('input', () => { fn(el); renderAgentCert(); }); };
@@ -2780,6 +2838,8 @@
             bind('cfAlign', el => f.align = el.value);
             bind('cfBold', el => f.bold = el.checked);
             bind('cfItalic', el => f.italic = el.checked);
+            bind('cfShort', el => f.monthShort = el.checked);
+            bind('cfSlot', el => f.slot = +el.value);
         }
         window.addCertField = function() {
             window.certFields.push({ id: 'text' + Date.now(), type: 'text', text: 'New text', x: 30, y: 45, w: 40, h: 6, size: 2, align: 'center', color: '#111111' });
@@ -2790,6 +2850,28 @@
             if (window.certSel === null || !window.certFields[window.certSel]) return;
             window.certFields.splice(window.certSel, 1);
             window.certSel = null;
+            renderAgentCert(); renderCertFieldEditor();
+        };
+        window.resetCertToOriginal = function() {
+            if (!confirm("Replace the text boxes with this template's original text? (Nothing is saved until you press Save design.)")) return;
+            window.certFields = originalCertFields(activeCertTemplate()); window.certSel = null;
+            renderAgentCert(); renderCertFieldEditor();
+        };
+        window.selectCertTemplate = async function(id) {
+            if (!allCertTemplates().some(t => t.id === id)) return;
+            if (isAdminMode()) { if (!(await saveCertSettings({ activeId: id }))) return; logAudit('edit_certificate', 'Selected certificate template', { template: (allCertTemplates().find(t => t.id === id) || {}).name }); }
+            else window.certSettings = Object.assign({}, window.certSettings, { activeId: id });
+            window.certFields = savedCertFields(); window.certSel = null;
+            certOcrStatus('');
+            renderAgentCert(); renderCertFieldEditor();
+        };
+        window.deleteCertTemplate = async function() {
+            const T = activeCertTemplate();
+            if (T.builtin || !isAdminMode()) return;
+            if (!confirm(`Delete the template "${T.name}"? The two default templates stay.`)) return;
+            if (!(await saveCertSettings({ custom: customCertTemplates().filter(x => x.id !== T.id), activeId: 'default1' }))) return;
+            logAudit('edit_certificate', 'Deleted certificate template', { template: T.name });
+            window.certFields = savedCertFields(); window.certSel = null;
             renderAgentCert(); renderCertFieldEditor();
         };
         window.resetCertLayout = function() {
@@ -2898,13 +2980,19 @@
                 const wPct = Math.min(96, (x1 - x0) / W * 100 * 1.35 + 4);
                 let id = 'ocr' + k;
                 // recognise the parts that change per certificate
-                if (/\b(from|on|dated?)\b/i.test(text) && (/\b(19|20)\d\d\b/.test(text) || monthRe.test(text))) { text = /\bto\b/i.test(text) ? 'From {from} to {to}' : 'On {from}'; id = 'dates'; }
+                const isDate = (/\b(19|20)\d\d\b/.test(text) && monthRe.test(text + ' ')) && (/\b(from|on|dated?|to)\b/i.test(text) || /^\s*\d/.test(text));
+                let monthShort = false;
+                if (isDate) {
+                    monthShort = !/(january|february|march|april|june|july|august|september|october|november|december)/i.test(text);
+                    const hasTo = /\bto\b/i.test(text), lead = /^\s*from\b/i.test(text) ? 'From ' : /^\s*on\b/i.test(text) ? 'On ' : '';
+                    text = hasTo ? `${lead || ''}{from} to {to}` : `${lead || ''}{from}`; id = 'dates';
+                }
                 else if (near(text, sg.name)) { text = '{signer_name}'; id = 'signer_name'; }
                 else if (near(text, sg.title)) { text = '{signer_title}'; id = 'signer_title'; }
                 else if (near(text, sg.company)) { text = '{signer_company}'; id = 'signer_company'; }
                 window.__ocrDebug.push({ text: l.text.trim(), ink: +ink.toFixed(3), hgt });
                 fields.push({
-                    id, type: 'text', text, size: +(fontPx / W * 100).toFixed(2), color: hex, bold: id === 'ocr' + k && ink > 0.32, italic: false,
+                    id, type: 'text', text, size: +(fontPx / W * 100).toFixed(2), color: hex, bold: id === 'ocr' + k && ink > 0.32, italic: false, monthShort,
                     align: centred ? 'center' : 'left',
                     x: +(centred ? (cx / W * 100) - wPct / 2 : x0 / W * 100).toFixed(2), w: +wPct.toFixed(2),
                     y: +(ry0 / H * 100).toFixed(2), h: +((ry1 - ry0) / H * 100).toFixed(2),
@@ -2937,15 +3025,15 @@
             return fields;
         }
 
-        // Replaces the saved template (and its text boxes) for everyone right away; the old one is kept for "Restore previous"
-        async function replaceCertTemplate(t, fields, label) {
-            if (!isAdminMode()) return;
-            const cs = window.certSettings || {};
-            const patch = { template: t, fields, previousTemplate: cs.template || null, previousFields: Array.isArray(cs.fields) ? cs.fields : savedCertFields() };
-            if (!(await saveCertSettings(patch))) { renderAgentCert(); return; }
-            logAudit('edit_certificate', 'Agent certificate template', { template: label, textBoxes: (fields || []).length });
+        // Adds an uploaded template to the list (for everyone) and selects it
+        async function addCertTemplate(name, t, fields) {
+            if (!isAdminMode()) return false;
+            const entry = { id: 'custom-' + Date.now().toString(36), name, template: t, fields, ocrFields: clone(fields) };
+            if (!(await saveCertSettings({ custom: customCertTemplates().concat(entry), activeId: entry.id }))) { renderAgentCert(); return false; }
+            logAudit('edit_certificate', 'Added certificate template', { template: name, textBoxes: fields.length });
             window.certFields = savedCertFields(); window.certSel = null;
             renderAgentCert(); renderCertFieldEditor();
+            return true;
         }
 
         window.uploadCertTemplate = function(event) {
@@ -2971,9 +3059,11 @@
                         if (!confirm('Could not read the text in this image (' + err.message + ').\nUse the image as it is? Its text will not be editable.')) { certOcrStatus(''); return; }
                         fields = clone(DEFAULT_CERT_FIELDS.filter(f => ['name', 'dates', 'signature', 'rule', 'signer'].includes(f.id)));
                     }
-                    await replaceCertTemplate({ orig, w: c.width, h: c.height }, fields, `new image: ${file.name}`);
+                    const base = file.name.replace(/\.[^.]+$/, '');
+                    const name = (prompt('Name for this template:', base) || base).trim() || base;
+                    if (!(await addCertTemplate(name, { orig, w: c.width, h: c.height }, fields))) { certOcrStatus(''); return; }
                     const n = fields.filter(f => f.erase).length;
-                    certOcrStatus(`<i class="fa-solid fa-circle-check mr-1"></i>Template replaced. ${n} line(s) of text in the image are now editable. ` +
+                    certOcrStatus(`<i class="fa-solid fa-circle-check mr-1"></i>Template "${escapeHtml(name)}" added. ${n} line(s) of text in the image are now editable. ` +
                         `Check them, move the name, dates and signature into place if needed, then <b>Save design for everyone</b>.`);
                     document.getElementById('certEditToggle').checked = true; setCertEditing(true);
                 };
@@ -2982,30 +3072,34 @@
             };
             reader.readAsDataURL(file);
         };
-        window.useDefaultCertTemplate = function() {
-            const cs = window.certSettings || {};
-            if (!cs.template && !(Array.isArray(cs.fields) && cs.fields.length)) return;   // already the default
-            if (confirm('Go back to the default template and its text?')) replaceCertTemplate(null, null, 'default');
-        };
-        window.restorePreviousCertTemplate = function() {
-            const cs = window.certSettings || {};
-            if (!('previousTemplate' in cs)) return;
-            if (confirm('Go back to the previous template?')) replaceCertTemplate(cs.previousTemplate || null, cs.previousFields || null, 'restored previous');
-        };
-
         window.saveCertDefaults = async function() {
             if (!isAdminMode()) return;
-            if (await saveCertSettings({ fields: clone(window.certFields) })) {
-                logAudit('edit_certificate', 'Agent certificate design', { textBoxes: window.certFields.length });
+            const T = activeCertTemplate(), cs = window.certSettings || {}, fields = clone(window.certFields);
+            const patch = T.builtin ? { designs: Object.assign({}, cs.designs || {}, { [T.id]: { fields } }) }
+                                    : { custom: customCertTemplates().map(x => x.id === T.id ? Object.assign({}, x, { fields }) : x) };
+            if (await saveCertSettings(patch)) {
+                logAudit('edit_certificate', 'Certificate design', { template: T.name, textBoxes: fields.length });
                 alert('Saved. Everyone will now use this design.');
             }
         };
 
         // ----- signer (admins only) -----
         let pendingSignature = null;
+        function signerSlot() { return +(document.getElementById('acSignerSlot').value || 1); }
+        window.loadSignerSlot = function() {
+            const sg = signerSlot() === 2 ? getCertSigner2() : getCertSigner();
+            document.getElementById('acSignerNameInput').value = sg.name;
+            document.getElementById('acSignerTitleInput').value = sg.title;
+            document.getElementById('acSignerCompanyInput').value = sg.company;
+            pendingSignature = sg.signature || '';
+            const fallback = signerSlot() === 2 ? '' : DEFAULT_SIGNATURE_SRC;
+            const pv = document.getElementById('acSignerPreview');
+            if (pendingSignature || fallback) { pv.src = pendingSignature || fallback; pv.style.display = ''; } else { pv.removeAttribute('src'); pv.style.display = 'none'; }
+        };
         window.toggleAgentCertSignerEditor = function(open) {
             const box = document.getElementById('agentCertSignerEditor');
             if (!open || window.portalMode !== 'admin') { box.classList.add('hidden'); return; }
+            document.getElementById('acSignerSlot').value = '1';
             const sg = getCertSigner();
             document.getElementById('acSignerNameInput').value = sg.name;
             document.getElementById('acSignerTitleInput').value = sg.title;
@@ -3033,16 +3127,18 @@
         window.uploadAgentCertSignature = function(event) {
             const file = event.target.files[0];
             event.target.value = '';
-            if (file) shrinkImageFile(file, d => { pendingSignature = d; document.getElementById('acSignerPreview').src = d; });
+            if (file) shrinkImageFile(file, d => { pendingSignature = d; const pv = document.getElementById('acSignerPreview'); pv.src = d; pv.style.display = ''; });
         };
         window.useDefaultAgentCertSignature = function() {
             pendingSignature = '';
-            document.getElementById('acSignerPreview').src = DEFAULT_SIGNATURE_SRC;
+            const pv = document.getElementById('acSignerPreview');
+            if (signerSlot() === 2) { pv.removeAttribute('src'); pv.style.display = 'none'; } else { pv.src = DEFAULT_SIGNATURE_SRC; pv.style.display = ''; }
         };
         window.resetAgentCertSigner = function() {
-            document.getElementById('acSignerNameInput').value = DEFAULT_CERT_SIGNER.name;
-            document.getElementById('acSignerTitleInput').value = DEFAULT_CERT_SIGNER.title;
-            document.getElementById('acSignerCompanyInput').value = DEFAULT_CERT_SIGNER.company;
+            const d = signerSlot() === 2 ? DEFAULT_CERT_SIGNER2 : DEFAULT_CERT_SIGNER;
+            document.getElementById('acSignerNameInput').value = d.name;
+            document.getElementById('acSignerTitleInput').value = d.title;
+            document.getElementById('acSignerCompanyInput').value = d.company;
             useDefaultAgentCertSignature();
         };
         window.saveAgentCertSigner = async function() {
@@ -3053,8 +3149,9 @@
                 company: document.getElementById('acSignerCompanyInput').value.trim(),
                 signature: pendingSignature || ''
             };
-            if (!(await saveCertSettings({ signer }))) return;
-            logAudit('edit_signer', 'Agent certificate', { name: signer.name, title: signer.title, signature: signer.signature ? 'custom' : 'default' });
+            const slot = signerSlot();
+            if (!(await saveCertSettings(slot === 2 ? { signer2: signer } : { signer }))) return;
+            logAudit('edit_signer', `Agent certificate – signer ${slot}`, { name: signer.name, title: signer.title, signature: signer.signature ? 'custom' : 'default' });
             toggleAgentCertSignerEditor(false);
             renderAgentCert();
         };
@@ -3113,7 +3210,7 @@
         // ----- print: one A4 landscape page, no browser header/footer -----
         window.printAgentCert = async function() {
             const bg = document.getElementById('agentCertBg');
-            await composeTemplate((window.certSettings || {}).template || null, window.certFields, src => { if (bg.getAttribute('src') !== src) bg.src = src; });
+            await composeTemplate(activeCertTemplate().template, window.certFields, src => { if (bg.getAttribute('src') !== src) bg.src = src; });
             try { await bg.decode(); } catch (e) {}
             const emp = window.employees[window.activeCertEmpIndex];
             logAudit('print_certificate', `${emp ? emp.EmpID : '-'} ${document.getElementById('agentCertNameInput').value.trim()}`,
