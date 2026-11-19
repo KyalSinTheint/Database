@@ -439,3 +439,6 @@ grant execute on function public.admin_create_user(text, text, text) to authenti
 grant execute on function public.admin_set_role(uuid, text)         to authenticated;
 grant execute on function public.admin_set_password(uuid, text)     to authenticated;
 grant execute on function public.admin_delete_user(uuid)            to authenticated;
+
+-- Make the new functions visible to the app right away
+notify pgrst, 'reload schema';
