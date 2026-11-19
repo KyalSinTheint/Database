@@ -331,3 +331,111 @@ exception when duplicate_object then null; end $$;
 update public.trainings
 set data_json = data_json || jsonb_build_object('uid', gen_random_uuid()::text)
 where jsonb_typeof(data_json) = 'object' and not (data_json ? 'uid');
+
+-- ------------------------------------------------------------------
+-- Account management from the app (admins only).
+-- Runs inside the database, so no secret key is needed in the browser
+-- and public sign-up can stay switched off.
+-- ------------------------------------------------------------------
+create extension if not exists pgcrypto with schema extensions;
+
+create or replace function public.admin_list_users()
+returns table (user_id uuid, email text, role text, created_at timestamptz, last_sign_in_at timestamptz)
+language plpgsql security definer set search_path = public, auth as $$
+begin
+  if not public.is_admin() then raise exception 'Only admins can manage accounts'; end if;
+  return query
+    select u.id, u.email::text, coalesce(a.role, 'user'), u.created_at, u.last_sign_in_at
+    from auth.users u left join public.app_users a on a.user_id = u.id
+    order by coalesce(a.role, 'user'), u.email;
+end
+$$;
+
+create or replace function public.admin_create_user(p_email text, p_password text, p_role text default 'user')
+returns uuid
+language plpgsql security definer set search_path = public, auth, extensions as $$
+declare
+  v_uid   uuid := gen_random_uuid();
+  v_email text := lower(trim(coalesce(p_email, '')));
+begin
+  if not public.is_admin() then raise exception 'Only admins can manage accounts'; end if;
+  if p_role not in ('admin', 'user') then raise exception 'Role must be admin or user'; end if;
+  if v_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then raise exception 'Please enter a valid email address'; end if;
+  if length(coalesce(p_password, '')) < 8 then raise exception 'Password must be at least 8 characters'; end if;
+  if exists (select 1 from auth.users where lower(email) = v_email) then raise exception 'An account with this email already exists'; end if;
+
+  insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password,
+    email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+    created_at, updated_at,
+    confirmation_token, recovery_token, email_change, email_change_token_new
+  ) values (
+    '00000000-0000-0000-0000-000000000000', v_uid, 'authenticated', 'authenticated',
+    v_email, crypt(p_password, gen_salt('bf')),
+    now(), '{"provider":"email","providers":["email"]}', '{}',
+    now(), now(),
+    '', '', '', ''
+  );
+  insert into auth.identities (
+    id, user_id, provider_id, provider, identity_data, last_sign_in_at, created_at, updated_at
+  ) values (
+    gen_random_uuid(), v_uid, v_uid::text, 'email',
+    jsonb_build_object('sub', v_uid::text, 'email', v_email, 'email_verified', true),
+    now(), now(), now()
+  );
+  insert into public.app_users (user_id, email, role) values (v_uid, v_email, p_role)
+  on conflict (user_id) do update set role = excluded.role, email = excluded.email;
+  return v_uid;
+end
+$$;
+
+create or replace function public.admin_set_role(p_user_id uuid, p_role text)
+returns void
+language plpgsql security definer set search_path = public, auth as $$
+begin
+  if not public.is_admin() then raise exception 'Only admins can manage accounts'; end if;
+  if p_role not in ('admin', 'user') then raise exception 'Role must be admin or user'; end if;
+  if p_role = 'user' and not exists (select 1 from public.app_users where role = 'admin' and user_id <> p_user_id) then
+    raise exception 'There must be at least one admin';
+  end if;
+  insert into public.app_users (user_id, email, role)
+  select id, email, p_role from auth.users where id = p_user_id
+  on conflict (user_id) do update set role = excluded.role;
+end
+$$;
+
+create or replace function public.admin_set_password(p_user_id uuid, p_password text)
+returns void
+language plpgsql security definer set search_path = public, auth, extensions as $$
+begin
+  if not public.is_admin() then raise exception 'Only admins can manage accounts'; end if;
+  if length(coalesce(p_password, '')) < 8 then raise exception 'Password must be at least 8 characters'; end if;
+  update auth.users set encrypted_password = crypt(p_password, gen_salt('bf')), updated_at = now() where id = p_user_id;
+  if not found then raise exception 'Account not found'; end if;
+end
+$$;
+
+create or replace function public.admin_delete_user(p_user_id uuid)
+returns void
+language plpgsql security definer set search_path = public, auth as $$
+begin
+  if not public.is_admin() then raise exception 'Only admins can manage accounts'; end if;
+  if p_user_id = auth.uid() then raise exception 'You cannot delete your own account'; end if;
+  if exists (select 1 from public.app_users where user_id = p_user_id and role = 'admin')
+     and not exists (select 1 from public.app_users where role = 'admin' and user_id <> p_user_id) then
+    raise exception 'There must be at least one admin';
+  end if;
+  delete from auth.users where id = p_user_id;
+end
+$$;
+
+revoke all on function public.admin_list_users()                 from public, anon;
+revoke all on function public.admin_create_user(text, text, text) from public, anon;
+revoke all on function public.admin_set_role(uuid, text)         from public, anon;
+revoke all on function public.admin_set_password(uuid, text)     from public, anon;
+revoke all on function public.admin_delete_user(uuid)            from public, anon;
+grant execute on function public.admin_list_users()                 to authenticated;
+grant execute on function public.admin_create_user(text, text, text) to authenticated;
+grant execute on function public.admin_set_role(uuid, text)         to authenticated;
+grant execute on function public.admin_set_password(uuid, text)     to authenticated;
+grant execute on function public.admin_delete_user(uuid)            to authenticated;

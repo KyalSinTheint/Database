@@ -151,6 +151,10 @@
             <select id="fySelect" onchange="selectFy(this.value === 'all' ? null : +this.value)" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-semibold bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
             <button type="button" id="fyAddBtn" onclick="addFyYear()" title="Add the next year to the list" class="hidden px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-dashed border-gray-400 text-gray-600 hover:bg-gray-50 cursor-pointer">+ Next year</button>
             <span id="fyRange" class="text-xs text-gray-500 ml-1"></span>
+            <span class="flex-1"></span>
+            <button type="button" data-admin-only="1" onclick="openAccounts()" class="bg-white border border-gray-300 hover:bg-blue-50 text-blue-800 px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm">
+                <i class="fa-solid fa-users-gear"></i> Accounts
+            </button>
         </div>
 
         <!-- Summary Stat Cards -->
@@ -679,6 +683,35 @@
     </div>
 
     <!-- ATTENDANCE DATE MANAGEMENT MODAL -->
+    <!-- ACCOUNTS (admins create users/admins, change roles) -->
+    <div id="accountsModal" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-4xl w-full p-5 shadow-2xl max-h-[92vh] flex flex-col">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-base font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-users-gear text-blue-700"></i> Accounts</h3>
+                <button type="button" onclick="closeAccounts()" class="text-gray-400 hover:text-gray-600 text-xl font-bold cursor-pointer">&times;</button>
+            </div>
+            <form onsubmit="createAccount(event)" class="bg-gray-50 border rounded-lg p-3 mb-3 text-sm">
+                <div class="font-semibold text-gray-700 mb-2"><i class="fa-solid fa-user-plus mr-1"></i>Create an account</div>
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+                    <label class="md:col-span-4 text-xs text-gray-600">Email<input type="email" id="accEmail" required autocomplete="off" class="w-full mt-0.5 px-3 py-2 border rounded-lg text-sm"></label>
+                    <label class="md:col-span-3 text-xs text-gray-600">Password (min. 8)
+                        <div class="flex mt-0.5"><input type="text" id="accPassword" required minlength="8" autocomplete="new-password" class="w-full px-3 py-2 border rounded-l-lg text-sm font-mono">
+                        <button type="button" onclick="generateAccPassword()" title="Generate a password" class="px-2.5 border border-l-0 rounded-r-lg bg-white hover:bg-gray-100 cursor-pointer"><i class="fa-solid fa-dice"></i></button></div></label>
+                    <label class="md:col-span-2 text-xs text-gray-600">Role<select id="accRole" class="w-full mt-0.5 px-2 py-2 border rounded-lg text-sm bg-white cursor-pointer"><option value="user">User</option><option value="admin">Admin</option></select></label>
+                    <button type="submit" id="accCreateBtn" class="md:col-span-3 bg-blue-700 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-semibold cursor-pointer">Create account</button>
+                </div>
+                <p class="text-[11px] text-gray-500 mt-2"><b>User</b> = can view everything; changes go to an admin for approval. <b>Admin</b> = can change data, approve requests and manage accounts. Give the password to the person; they can log in straight away.</p>
+                <p id="accMsg" class="hidden text-xs mt-2"></p>
+            </form>
+            <div class="overflow-auto border rounded-lg flex-1">
+                <table class="w-full text-xs">
+                    <thead class="bg-gray-100 sticky top-0"><tr><th class="px-3 py-2 text-left">Email</th><th class="px-3 py-2 text-left">Role</th><th class="px-3 py-2 text-left">Created</th><th class="px-3 py-2 text-left">Last login</th><th class="px-3 py-2 text-right">Actions</th></tr></thead>
+                    <tbody id="accRows"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- CHANGE REQUESTS (approvals / my requests) -->
     <div id="requestsModal" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl max-w-3xl w-full p-5 shadow-2xl max-h-[92vh] flex flex-col">
@@ -914,7 +947,7 @@
             document.querySelectorAll('[data-admin-only]').forEach(el => el.style.display = mode === 'admin' ? '' : 'none');
             document.querySelectorAll('.user-approval-note').forEach(el => el.classList.toggle('hidden', mode === 'admin'));
             if (mode !== 'admin') {
-                ['agentCertModal', 'transcriptCertModal', 'employeeModal', 'licensingModal', 'settingsModal', 'duplicateAuditModal']
+                ['agentCertModal', 'transcriptCertModal', 'employeeModal', 'licensingModal', 'settingsModal', 'duplicateAuditModal', 'accountsModal']
                     .forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
             }
             renderAuthArea();
@@ -1096,6 +1129,105 @@
             if (await setRequestStatus(r, 'cancelled')) { logAudit('cancel_request', r.target, { kind: r.kind, summary: r.summary }); loadRequests(); }
         };
 
+        // ---------------- Accounts (admins) ----------------
+        // Uses database functions that only admins can run (no secret key in the browser)
+        function accountsError(error) {
+            const m = (error && error.message) || String(error);
+            return /admin_[a-z_]+|could not find the function|does not exist|schema cache/i.test(m) && !/Only admins|at least|already exists|valid email|Password|own account|Role must/.test(m)
+                ? 'Account management is not set up yet: run supabase/schema.sql in Supabase.' : m;
+        }
+        function accMsg(text, ok) {
+            const el = document.getElementById('accMsg');
+            el.className = `text-xs mt-2 font-semibold ${ok ? 'text-emerald-700' : 'text-red-600'}`;
+            el.innerHTML = text;
+            el.classList.toggle('hidden', !text);
+        }
+        window.openAccounts = function() {
+            if (!isAdminMode()) return;
+            if (!supabaseClient) { alert('Accounts need the cloud connection.'); return; }
+            document.getElementById('accountsModal').classList.remove('hidden');
+            accMsg('');
+            loadAccounts();
+        };
+        window.closeAccounts = function() { document.getElementById('accountsModal').classList.add('hidden'); };
+        window.generateAccPassword = function() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+            const a = new Uint32Array(12); (window.crypto || {}).getRandomValues ? crypto.getRandomValues(a) : a.forEach((_, i) => a[i] = Math.random() * 1e9);
+            document.getElementById('accPassword').value = Array.from(a, n => chars[n % chars.length]).join('');
+        };
+
+        async function loadAccounts() {
+            const box = document.getElementById('accRows');
+            box.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500"><i class="fa-solid fa-spinner fa-spin mr-1"></i>Loading…</td></tr>';
+            const { data, error } = await supabaseClient.rpc('admin_list_users');
+            if (error) { box.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-600">${escapeHtml(accountsError(error))}</td></tr>`; return; }
+            window.accountRows = data || [];
+            const me = (window.authUser || {}).id;
+            const fmt = d => { if (!d) return '–'; const t = new Date(d); return isNaN(t) ? d : t.toLocaleString(); };
+            box.innerHTML = window.accountRows.length ? window.accountRows.map(a => `
+                <tr class="border-b">
+                    <td class="px-3 py-2 font-medium">${escapeHtml(a.email || '-')}${a.user_id === me ? ' <span class="ml-1 px-1.5 py-0.5 rounded bg-gray-200 text-[10px] font-bold">YOU</span>' : ''}</td>
+                    <td class="px-3 py-2"><select onchange="changeAccountRole('${a.user_id}', this.value, this)" class="px-2 py-1 border rounded bg-white cursor-pointer font-semibold ${a.role === 'admin' ? 'text-amber-700' : 'text-sky-700'}">
+                        <option value="user" ${a.role !== 'admin' ? 'selected' : ''}>User</option><option value="admin" ${a.role === 'admin' ? 'selected' : ''}>Admin</option></select></td>
+                    <td class="px-3 py-2 text-gray-600 whitespace-nowrap">${escapeHtml(fmt(a.created_at))}</td>
+                    <td class="px-3 py-2 text-gray-600 whitespace-nowrap">${escapeHtml(fmt(a.last_sign_in_at))}</td>
+                    <td class="px-3 py-2 text-right whitespace-nowrap">
+                        <button type="button" onclick="resetAccountPassword('${a.user_id}')" class="text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded font-semibold cursor-pointer"><i class="fa-solid fa-key mr-1"></i>Password</button>
+                        ${a.user_id === me ? '' : `<button type="button" onclick="deleteAccount('${a.user_id}')" class="text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded font-semibold cursor-pointer"><i class="fa-solid fa-trash mr-1"></i>Delete</button>`}
+                    </td>
+                </tr>`).join('') : '<tr><td colspan="5" class="p-4 text-center text-gray-500">No accounts.</td></tr>';
+        }
+
+        window.createAccount = async function(event) {
+            event.preventDefault();
+            if (!isAdminMode()) return;
+            const email = document.getElementById('accEmail').value.trim().toLowerCase();
+            const password = document.getElementById('accPassword').value;
+            const role = document.getElementById('accRole').value;
+            const btn = document.getElementById('accCreateBtn');
+            btn.disabled = true; btn.textContent = 'Creating…';
+            const { error } = await supabaseClient.rpc('admin_create_user', { p_email: email, p_password: password, p_role: role });
+            btn.disabled = false; btn.textContent = 'Create account';
+            if (error) { accMsg(escapeHtml(accountsError(error)), false); return; }
+            logAudit('create_account', email, { role });   // the password is never logged
+            accMsg(`Account created: <b>${escapeHtml(email)}</b> (${role === 'admin' ? 'Admin' : 'User'}). Password: <span class="font-mono">${escapeHtml(password)}</span> — give it to the person now; it is not shown again.`, true);
+            document.getElementById('accEmail').value = ''; document.getElementById('accPassword').value = ''; document.getElementById('accRole').value = 'user';
+            loadAccounts();
+        };
+
+        window.changeAccountRole = async function(userId, role, sel) {
+            const a = (window.accountRows || []).find(x => x.user_id === userId);
+            if (!a || a.role === role) return;
+            const self = userId === (window.authUser || {}).id;
+            if (!confirm(`Change ${a.email} to ${role === 'admin' ? 'Admin' : 'User'}?` + (self && role === 'user' ? '\n\nYou will lose admin rights yourself.' : ''))) { sel.value = a.role; return; }
+            const { error } = await supabaseClient.rpc('admin_set_role', { p_user_id: userId, p_role: role });
+            if (error) { alert(accountsError(error)); sel.value = a.role; return; }
+            logAudit('change_role', a.email, { from: a.role, to: role });
+            if (self && role === 'user') { alert('You are now a User. The page will reload.'); location.reload(); return; }
+            loadAccounts();
+        };
+
+        window.resetAccountPassword = async function(userId) {
+            const a = (window.accountRows || []).find(x => x.user_id === userId);
+            if (!a) return;
+            const pw = prompt(`New password for ${a.email} (at least 8 characters):`, '');
+            if (pw === null) return;
+            const { error } = await supabaseClient.rpc('admin_set_password', { p_user_id: userId, p_password: pw });
+            if (error) { alert(accountsError(error)); return; }
+            logAudit('reset_password', a.email, {});
+            alert(`Password changed for ${a.email}.`);
+        };
+
+        window.deleteAccount = async function(userId) {
+            const a = (window.accountRows || []).find(x => x.user_id === userId);
+            if (!a) return;
+            if (!confirm(`Delete the account ${a.email}?\n\nThe person can no longer log in. Training records are not affected.`)) return;
+            const { error } = await supabaseClient.rpc('admin_delete_user', { p_user_id: userId });
+            if (error) { alert(accountsError(error)); return; }
+            logAudit('delete_account', a.email, { role: a.role });
+            loadAccounts();
+        };
+
         // ---------------- Audit trail ----------------
         // Who and when are filled in by the database (auth user), so they cannot be faked from the page.
         async function logAudit(action, target, details) {
@@ -1115,7 +1247,8 @@
             add_option: 'Added list option', remove_option: 'Removed list option', edit_settings: 'Changed settings',
             edit_certificate: 'Changed certificate settings', edit_signer: 'Changed signer', print_certificate: 'Printed certificate',
             print_transcript: 'Printed transcript', export_excel: 'Exported Excel',
-            request_change: 'Requested a change', approve_request: 'Approved request', reject_request: 'Rejected request', cancel_request: 'Cancelled request'
+            request_change: 'Requested a change', approve_request: 'Approved request', reject_request: 'Rejected request', cancel_request: 'Cancelled request',
+            create_account: 'Created account', change_role: 'Changed role', reset_password: 'Reset password', delete_account: 'Deleted account'
         };
 
         window.openAuditLog = async function() {
