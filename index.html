@@ -705,6 +705,7 @@
                 <button type="button" onclick="closeHistory()" class="text-gray-400 hover:text-gray-600 text-xl font-bold cursor-pointer">&times;</button>
             </div>
             <p id="historySubtitle" class="text-xs text-gray-500 mb-3"></p>
+            <div id="historyRestore" class="hidden mb-3 text-xs bg-blue-50 border border-blue-200 rounded-lg px-3 py-2"></div>
             <div id="historyList" class="overflow-y-auto space-y-2 text-xs flex-1"></div>
         </div>
     </div>
@@ -1665,9 +1666,32 @@
                     ${idChange}
                 </div>`;
             }).join('') : '<div class="text-center text-gray-500 py-8">No changes recorded yet.</div>';
+            // Admins can give the person back an earlier code with the same prefix (e.g. after a wrong change)
+            const box = document.getElementById('historyRestore');
+            const cur = splitId(emp.EmpID);
+            const earlier = [...new Set((Array.isArray(emp.history) ? emp.history : []).flatMap(h => [h.idFrom, h.idTo]))]
+                .filter(id => { const s2 = splitId(id); return s2 && cur && s2.prefix === cur.prefix && id !== emp.EmpID && !window.employees.some(o => o !== emp && o.EmpID === id); });
+            box.innerHTML = isAdminMode() && earlier.length
+                ? `<i class="fa-solid fa-rotate-left mr-1 text-blue-700"></i>This person used ${earlier.length > 1 ? 'these codes' : 'this code'} before: ` +
+                  earlier.map(id => `<button type="button" onclick="restoreEarlierId(${idx}, '${jsAttr(id)}')" class="ml-1 font-mono font-bold text-blue-700 bg-white border border-blue-300 hover:bg-blue-100 px-2 py-0.5 rounded cursor-pointer">Use ${escapeHtml(id)} again</button>`).join('')
+                : '';
+            box.classList.toggle('hidden', !box.innerHTML);
             document.getElementById('historyModal').classList.remove('hidden');
         };
         window.closeHistory = function() { document.getElementById('historyModal').classList.add('hidden'); };
+        window.restoreEarlierId = function(idx, id) {
+            const emp = window.employees[idx];
+            if (!emp || !isAdminMode()) return;
+            if (window.employees.some(o => o !== emp && o.EmpID === id)) { alert(`${id} is used by someone else.`); return; }
+            const note = prompt(`Give ${emp.Name} the code ${id} again (instead of ${emp.EmpID})?\n\nReason / note:`, 'Restored the earlier ID code after a wrong change');
+            if (note === null) return;
+            addHistory(emp, { reason: 'correction', note: note.trim() || 'Restored the earlier ID code' });
+            const from = emp.EmpID;
+            emp.EmpID = id;
+            logAudit('edit_employee', `${id} ${emp.Name}`, { changes: [{ field: 'ID code', from, to: id }], reason: 'correction' });
+            recalculateAllEmployeeIDs('');
+            openHistory(window.employees.indexOf(emp));
+        };
 
         function normalizeEmployeesData() {
             if (!Array.isArray(window.employees)) return;
