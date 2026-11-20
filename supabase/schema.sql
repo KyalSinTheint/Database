@@ -174,21 +174,30 @@ select
   t.nrc,
   t.department,
   t.branch_name,
-  case c.key
-    when 'sales'        then 'Product & Sales'
-    when 'development'  then 'Development'
-    when 'agency'       then 'Agency'
-    when 'vocational'   then 'Vocational'
-    when 'ycp'          then 'Youth Connect Program'
-    when 'licensingAtt' then 'Licensing'
-  end              as category,
+  coalesce(
+    case c.key
+      when 'sales'        then 'Product & Sales'
+      when 'development'  then 'Development'
+      when 'agency'       then 'Agency'
+      when 'vocational'   then 'Vocational'
+      when 'ycp'          then 'Youth Connect Program'
+      when 'licensingAtt' then 'Licensing'
+    end,
+    -- programs added in the app: name from the saved settings
+    (select pr ->> 'label'
+       from public.app_settings st
+       cross join lateral jsonb_array_elements(case when jsonb_typeof(st.value -> 'customPrograms') = 'array' then st.value -> 'customPrograms' else '[]'::jsonb end) pr
+      where st.key = 'dropdown_options' and pr ->> 'key' = c.key
+      limit 1),
+    c.key)         as category,
   m.key            as module,
   d.value          as attendance_date
 from public.trainings t
 cross join lateral jsonb_each(case when jsonb_typeof(t.data_json) = 'object' then t.data_json else '{}'::jsonb end) c
 cross join lateral jsonb_each(case when jsonb_typeof(c.value) = 'object' then c.value else '{}'::jsonb end) m
 cross join lateral jsonb_array_elements_text(case when jsonb_typeof(m.value) = 'array' then m.value else '[]'::jsonb end) d
-where c.key in ('sales', 'development', 'agency', 'vocational', 'ycp', 'licensingAtt');
+-- every program: built-in ones and the ones added in the app (keys start with p_)
+where c.key in ('sales', 'development', 'agency', 'vocational', 'ycp', 'licensingAtt') or c.key like 'p\_%';
 
 create or replace view public.training_summary
 with (security_invoker = true) as

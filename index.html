@@ -208,6 +208,7 @@
                 </div>
                 <div class="bg-amber-50 text-amber-600 p-3 rounded-lg"><i class="fa-solid fa-user-graduate text-lg"></i></div>
             </div>
+            <div id="customStatCards" class="contents"></div>
         </div>
 
         <!-- DYNAMIC LICENSING NUMERICAL METRICS BOARD -->
@@ -293,6 +294,10 @@
                 </button>
                 <button type="button" onclick="switchTab('licensing')" id="tab-btn-licensing" class="tab-btn px-5 py-3.5 text-sm font-medium text-gray-600 flex items-center gap-2 whitespace-nowrap cursor-pointer">
                     <i class="fa-solid fa-certificate text-purple-600"></i> Licensing
+                </button>
+                <span id="customTabs" class="contents"></span>
+                <button type="button" data-admin-only="1" onclick="openProgramModal()" title="Add a new training program (tab)" class="px-4 py-3.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+                    <i class="fa-solid fa-plus"></i> Program
                 </button>
             </div>
 
@@ -683,6 +688,31 @@
     </div>
 
     <!-- ATTENDANCE DATE MANAGEMENT MODAL -->
+    <!-- PROGRAM (add / edit a training program and its sessions) -->
+    <div id="programModal" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4">
+        <form onsubmit="saveProgramModal(event)" class="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl max-h-[92vh] overflow-y-auto text-sm">
+            <div class="flex justify-between items-center mb-3">
+                <h3 id="programModalTitle" class="text-base font-bold text-gray-800"><i class="fa-solid fa-layer-group text-blue-700 mr-1"></i>New program</h3>
+                <button type="button" onclick="closeProgramModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold cursor-pointer">&times;</button>
+            </div>
+            <input type="hidden" id="programKey">
+            <div class="grid grid-cols-3 gap-3">
+                <label class="col-span-2 text-xs font-semibold text-gray-600">Program name<input type="text" id="programName" required maxlength="60" class="w-full mt-1 px-3 py-2 border rounded-lg text-sm font-normal" placeholder="e.g. Compliance Training"></label>
+                <label class="text-xs font-semibold text-gray-600">Colour<select id="programColor" class="w-full mt-1 px-2 py-2 border rounded-lg text-sm bg-white font-normal"></select></label>
+            </div>
+            <label class="block mt-3 text-xs font-semibold text-gray-600">Sessions <span class="font-normal text-gray-400">(one per line)</span>
+                <textarea id="programSessions" rows="7" class="w-full mt-1 px-3 py-2 border rounded-lg text-sm font-normal" placeholder="Day 1&#10;Day 2&#10;Final Assessment"></textarea></label>
+            <p class="text-[11px] text-gray-500 mt-1">Sessions that already have attendance cannot be removed. In Excel import, use the program name as the "Training Type".</p>
+            <p id="programMsg" class="hidden text-xs text-red-600 font-semibold mt-2"></p>
+            <div class="flex items-center gap-2 mt-4 pt-3 border-t">
+                <button type="button" id="programDeleteBtn" onclick="deleteProgram()" class="hidden text-red-700 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer"><i class="fa-solid fa-trash mr-1"></i>Delete program</button>
+                <span class="flex-1"></span>
+                <button type="button" onclick="closeProgramModal()" class="bg-gray-200 px-4 py-2 rounded-lg text-sm cursor-pointer">Cancel</button>
+                <button type="submit" class="bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer">Save</button>
+            </div>
+        </form>
+    </div>
+
     <!-- ACCOUNTS (admins create users/admins, change roles) -->
     <div id="accountsModal" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl max-w-4xl w-full p-5 shadow-2xl max-h-[92vh] flex flex-col">
@@ -872,14 +902,31 @@
         window.activeAttModule = null;
 
         // One entry per training category. Summary tab renders all of them.
-        window.categoryConfig = [
-            { key: 'sales',        label: 'Product & Sales', base: () => window.salesModules,       head: 'bg-emerald-800', sub: 'bg-emerald-50', chip: 'bg-emerald-100 text-emerald-800' },
-            { key: 'development',  label: 'Development',  base: () => window.developmentModules, head: 'bg-indigo-800',  sub: 'bg-indigo-50',  chip: 'bg-indigo-100 text-indigo-800' },
-            { key: 'agency',       label: 'Agency',       base: () => window.agencyModules,      head: 'bg-orange-800',  sub: 'bg-orange-50',  chip: 'bg-orange-100 text-orange-800' },
-            { key: 'vocational',   label: 'Vocational',   base: () => window.vocationalModules,  head: 'bg-teal-800',    sub: 'bg-teal-50',    chip: 'bg-teal-100 text-teal-800' },
-            { key: 'ycp',          label: 'Youth Connect Program', base: () => window.ycpModules,         head: 'bg-amber-800',   sub: 'bg-amber-50',   chip: 'bg-amber-100 text-amber-800' },
-            { key: 'licensingAtt', label: 'Licensing',    base: () => window.licensingDays,      head: 'bg-purple-800',  sub: 'bg-purple-50',  chip: 'bg-purple-100 text-purple-800' }
+        // Built-in programs plus programs added by admins (saved in the dropdown options = Supabase app_settings)
+        const BUILTIN_PROGRAMS = [
+            { key: 'sales',        tab: 'sales',       label: 'Product & Sales',       color: 'emerald', list: () => window.salesModules },
+            { key: 'development',  tab: 'development', label: 'Development',           color: 'indigo',  list: () => window.developmentModules },
+            { key: 'agency',       tab: 'agency',      label: 'Agency',                color: 'orange',  list: () => window.agencyModules },
+            { key: 'vocational',   tab: 'vocational',  label: 'Vocational',            color: 'teal',    list: () => window.vocationalModules },
+            { key: 'ycp',          tab: 'ycp',         label: 'Youth Connect Program', color: 'amber',   list: () => window.ycpModules },
+            { key: 'licensingAtt', tab: 'licensing',   label: 'Licensing',             color: 'purple',  list: () => window.licensingDays }
         ];
+        const PROGRAM_COLORS = ['cyan', 'rose', 'lime', 'fuchsia', 'sky', 'pink', 'yellow', 'slate', 'red', 'green', 'blue', 'violet'];
+        function customPrograms() { return ((window.dropdownOptions || {}).customPrograms || []).filter(p => p && p.key && p.label); }
+        function extraModules(key) { return (((window.dropdownOptions || {}).extraModules || {})[key]) || []; }
+        function buildCategoryConfig() {
+            const cls = c => ({ head: `bg-${c}-800`, sub: `bg-${c}-50`, chip: `bg-${c}-100 text-${c}-800` });
+            const withExtra = (list, key) => {
+                const out = list.slice(), known = new Set(out.map(moduleKey));
+                extraModules(key).forEach(m => { if (!known.has(moduleKey(m))) { known.add(moduleKey(m)); out.push(m); } });
+                return out;
+            };
+            return BUILTIN_PROGRAMS.map(p => Object.assign({ key: p.key, tab: p.tab, label: p.label, color: p.color, builtin: true, base: () => withExtra(p.list(), p.key) }, cls(p.color)))
+                .concat(customPrograms().map(p => Object.assign({ key: p.key, tab: p.key, label: p.label, color: p.color || 'cyan', builtin: false, base: () => (p.modules || []).slice() }, cls(p.color || 'cyan'))));
+        }
+        Object.defineProperty(window, 'categoryConfig', { get: buildCategoryConfig, configurable: true });
+        function programKeys() { return window.categoryConfig.map(c => c.key); }
+        function programForTab(tab) { return window.categoryConfig.find(c => c.tab === tab) || null; }
 
         function moduleKey(m) { return String(m || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
 
@@ -947,7 +994,7 @@
             document.querySelectorAll('[data-admin-only]').forEach(el => el.style.display = mode === 'admin' ? '' : 'none');
             document.querySelectorAll('.user-approval-note').forEach(el => el.classList.toggle('hidden', mode === 'admin'));
             if (mode !== 'admin') {
-                ['agentCertModal', 'transcriptCertModal', 'employeeModal', 'licensingModal', 'settingsModal', 'duplicateAuditModal', 'accountsModal']
+                ['agentCertModal', 'transcriptCertModal', 'employeeModal', 'licensingModal', 'settingsModal', 'duplicateAuditModal', 'accountsModal', 'programModal']
                     .forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
             }
             renderAuthArea();
@@ -1248,7 +1295,8 @@
             edit_certificate: 'Changed certificate settings', edit_signer: 'Changed signer', print_certificate: 'Printed certificate',
             print_transcript: 'Printed transcript', export_excel: 'Exported Excel',
             request_change: 'Requested a change', approve_request: 'Approved request', reject_request: 'Rejected request', cancel_request: 'Cancelled request',
-            create_account: 'Created account', change_role: 'Changed role', reset_password: 'Reset password', delete_account: 'Deleted account'
+            create_account: 'Created account', change_role: 'Changed role', reset_password: 'Reset password', delete_account: 'Deleted account',
+            add_program: 'Added program', edit_program: 'Edited program', delete_program: 'Deleted program', add_module: 'Added session', remove_module: 'Removed session'
         };
 
         window.openAuditLog = async function() {
@@ -1708,6 +1756,120 @@
             renderTable();
         }
 
+        // Tabs for programs added by admins, before the "+ Program" button
+        function renderProgramTabs() {
+            const box = document.getElementById('customTabs');
+            if (!box) return;
+            const progs = customPrograms();
+            if (!['summary', 'identification'].includes(window.currentTab) && !programForTab(window.currentTab)) window.currentTab = 'summary';
+            const html = progs.map(p => `<button type="button" onclick="switchTab('${jsAttr(p.key)}')" id="tab-btn-${escapeHtml(p.key)}" class="tab-btn px-5 py-3.5 text-sm font-medium text-gray-600 flex items-center gap-2 whitespace-nowrap cursor-pointer ${window.currentTab === p.key ? 'active-tab' : ''}">
+                <i class="fa-solid fa-layer-group text-${p.color || 'cyan'}-600"></i> ${escapeHtml(p.label)}</button>`).join('');
+            if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active-tab', b.id === `tab-btn-${window.currentTab}`));
+        }
+
+        // ---------------- Programs and sessions (admins) ----------------
+        function programUsage(key, mod) {
+            return window.employees.reduce((n, e) => n + Object.entries(e[key] || {}).filter(([m]) => mod === undefined || m === mod)
+                .reduce((k, [, arr]) => k + (Array.isArray(arr) ? arr.length : 0), 0), 0);
+        }
+        function programMsg(t) { const el = document.getElementById('programMsg'); el.textContent = t || ''; el.classList.toggle('hidden', !t); }
+        window.openProgramModal = function(key) {
+            if (!isAdminMode()) return;
+            const p = key ? customPrograms().find(x => x.key === key) : null;
+            document.getElementById('programModalTitle').innerHTML = `<i class="fa-solid fa-layer-group text-blue-700 mr-1"></i>${p ? 'Edit program' : 'New program'}`;
+            document.getElementById('programKey').value = p ? p.key : '';
+            document.getElementById('programName').value = p ? p.label : '';
+            const used = customPrograms().map(x => x.color);
+            const color = p ? (p.color || 'cyan') : (PROGRAM_COLORS.find(c => !used.includes(c)) || 'cyan');
+            document.getElementById('programColor').innerHTML = PROGRAM_COLORS.map(c => `<option value="${c}" ${c === color ? 'selected' : ''}>${c[0].toUpperCase() + c.slice(1)}</option>`).join('');
+            document.getElementById('programSessions').value = p ? (p.modules || []).join('\n') : '';
+            document.getElementById('programDeleteBtn').classList.toggle('hidden', !p);
+            programMsg('');
+            document.getElementById('programModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('programName').focus(), 50);
+        };
+        window.closeProgramModal = function() { document.getElementById('programModal').classList.add('hidden'); };
+        window.saveProgramModal = function(event) {
+            event.preventDefault();
+            if (!isAdminMode()) return;
+            const key = document.getElementById('programKey').value;
+            const label = document.getElementById('programName').value.trim().replace(/\s+/g, ' ');
+            const color = document.getElementById('programColor').value;
+            const seen = new Set();
+            const modules = document.getElementById('programSessions').value.split(/\r?\n/).map(m => m.trim().replace(/\s+/g, ' '))
+                .filter(m => m && !seen.has(moduleKey(m)) && seen.add(moduleKey(m)));
+            if (!label) { programMsg('Please enter a program name.'); return; }
+            const clash = window.categoryConfig.find(c => c.key !== key && c.label.toLowerCase() === label.toLowerCase());
+            if (clash) { programMsg(`A program called "${clash.label}" already exists.`); return; }
+            if (!modules.length) { programMsg('Please add at least one session.'); return; }
+            const list = customPrograms().slice();
+            if (key) {
+                const p = list.find(x => x.key === key);
+                const removedUsed = (p.modules || []).filter(m => !modules.some(x => moduleKey(x) === moduleKey(m)) && programUsage(key, m) > 0);
+                if (removedUsed.length) { programMsg(`These sessions already have attendance and cannot be removed: ${removedUsed.join(', ')}`); return; }
+                logAudit('edit_program', label, { from: p.label !== label ? p.label : undefined, sessions: modules });
+                Object.assign(p, { label, color, modules });
+            } else {
+                const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 20) || 'program';
+                const newKey = `p_${slug}_${Date.now().toString(36)}`;
+                list.push({ key: newKey, label, color, modules });
+                logAudit('add_program', label, { sessions: modules });
+                window.currentTab = newKey;
+            }
+            window.dropdownOptions.customPrograms = list;
+            closeProgramModal();
+            saveData(); renderTable();
+        };
+        window.deleteProgram = function() {
+            const key = document.getElementById('programKey').value;
+            const p = customPrograms().find(x => x.key === key);
+            if (!p || !isAdminMode()) return;
+            const n = programUsage(key);
+            if (n > 0) { programMsg(`"${p.label}" has ${n} attendance record(s). Remove them first; programs with attendance cannot be deleted.`); return; }
+            if (!confirm(`Delete the program "${p.label}"?`)) return;
+            window.dropdownOptions.customPrograms = customPrograms().filter(x => x.key !== key);
+            logAudit('delete_program', p.label, {});
+            if (window.currentTab === key) window.currentTab = 'summary';
+            closeProgramModal();
+            saveData(); renderTable();
+        };
+        window.addProgramSession = function(key) {
+            if (!isAdminMode()) return;
+            const cfg = window.categoryConfig.find(c => c.key === key);
+            if (!cfg) return;
+            const name = (prompt(`New session for ${cfg.label}:`, '') || '').trim().replace(/\s+/g, ' ');
+            if (!name) return;
+            if (cfg.base().some(m => moduleKey(m) === moduleKey(name))) { alert(`"${name}" already exists in ${cfg.label}.`); return; }
+            if (cfg.builtin) {
+                const all = Object.assign({}, window.dropdownOptions.extraModules || {});
+                all[key] = (all[key] || []).concat(name);
+                window.dropdownOptions.extraModules = all;
+            } else {
+                window.dropdownOptions.customPrograms = customPrograms().map(p => p.key === key ? Object.assign({}, p, { modules: (p.modules || []).concat(name) }) : p);
+            }
+            logAudit('add_module', cfg.label, { session: name });
+            saveData(); renderTable();
+        };
+        window.removeProgramSession = function(key, mod) {
+            if (!isAdminMode()) return;
+            const cfg = window.categoryConfig.find(c => c.key === key);
+            if (!cfg) return;
+            if (programUsage(key, mod) > 0) { alert(`"${mod}" has attendance recorded and cannot be removed.`); return; }
+            if (!confirm(`Remove the session "${mod}" from ${cfg.label}?`)) return;
+            if (cfg.builtin) {
+                const all = Object.assign({}, window.dropdownOptions.extraModules || {});
+                all[key] = (all[key] || []).filter(m => m !== mod);
+                window.dropdownOptions.extraModules = all;
+            } else {
+                window.dropdownOptions.customPrograms = customPrograms().map(p => p.key === key ? Object.assign({}, p, { modules: (p.modules || []).filter(m => m !== mod) }) : p);
+            }
+            // drop empty date lists so the column disappears
+            window.employees.forEach(e => { if (e[key] && Array.isArray(e[key][mod]) && !e[key][mod].length) delete e[key][mod]; });
+            logAudit('remove_module', cfg.label, { session: mod });
+            saveData(); renderTable();
+        };
+
         window.switchTab = function(tab) {
             window.currentTab = tab;
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active-tab'));
@@ -1815,7 +1977,7 @@
         function attDates(emp, cat, mod) { const arr = (emp[cat] || {})[mod]; return Array.isArray(arr) ? arr.filter(inPeriod) : []; }
         function attCount(emp, cat, mod) { return attDates(emp, cat, mod).length; }
         function hasBatch(emp) { return !!(emp.licensing && emp.licensing.Batch && emp.licensing.Batch !== '-'); }
-        function periodTotal(emp) { return ['sales', 'development', 'agency', 'vocational', 'ycp', 'licensingAtt'].reduce((n, c) => n + getTotalCategoryCount(emp, c), 0); }
+        function periodTotal(emp) { return programKeys().reduce((n, c) => n + getTotalCategoryCount(emp, c), 0); }
 
         window.selectedFy = undefined;   // undefined = current FY (default), null = all time, number = FY start year
         function renderFyTabs() {
@@ -1823,7 +1985,7 @@
             if (!el) return;
             const cur = currentFyYear();
             let first = cur;
-            (window.employees || []).forEach(emp => ['sales', 'development', 'agency', 'vocational', 'ycp', 'licensingAtt'].forEach(c =>
+            (window.employees || []).forEach(emp => programKeys().forEach(c =>
                 Object.values(emp[c] || {}).forEach(arr => (Array.isArray(arr) ? arr : []).forEach(d => { const y = fyOf(d); if (y !== null && y < first && y > 1990) first = y; }))));
             const last = cur + 1 + (+(window.dropdownOptions || {}).fyExtraYears || 0);   // always offer next year
             const sel = window.selectedFy === undefined ? cur : window.selectedFy;
@@ -1895,6 +2057,15 @@
 
         function updateStats() {
             document.getElementById('statEmployees').innerText = getUniqueAttendeesCount();
+            const cs = document.getElementById('customStatCards');
+            if (cs) cs.innerHTML = window.categoryConfig.filter(c => !c.builtin).map(c => `
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
+                    <div>
+                        <p class="text-[11px] text-gray-500 font-semibold uppercase tracking-wider">${escapeHtml(c.label)} Sessions</p>
+                        <p class="text-xl font-bold text-${c.color}-700 mt-1">${getUniqueDatesCount(c.key)}</p>
+                    </div>
+                    <div class="bg-${c.color}-50 text-${c.color}-600 p-3 rounded-lg"><i class="fa-solid fa-layer-group text-lg"></i></div>
+                </div>`).join('');
             document.getElementById('statSales').innerText = getUniqueDatesCount('sales');
             document.getElementById('statDev').innerText = getUniqueDatesCount('development');
             document.getElementById('statLicensing').innerText = getUniqueBatchesCount();
@@ -1930,7 +2101,7 @@
 
         // ---------------- Audit Typos: similar names / NRCs, choose what to keep ----------------
         function attendanceTotal(emp) {
-            return ['sales', 'development', 'agency', 'vocational', 'ycp', 'licensingAtt'].reduce((n, c) =>
+            return programKeys().reduce((n, c) =>
                 n + Object.values(emp[c] || {}).reduce((m, arr) => m + (Array.isArray(arr) ? arr.length : 0), 0), 0);
         }
 
@@ -2019,7 +2190,7 @@
                 keep.Name = nameFrom.Name;
                 keep.NRC = nrcFrom.NRC;
                 // attendance: union of dates
-                ['sales', 'development', 'agency', 'vocational', 'ycp', 'licensingAtt'].forEach(cat => {
+                programKeys().forEach(cat => {
                     Object.entries(other[cat] || {}).forEach(([mod, dates]) => {
                         if (!keep[cat]) keep[cat] = {};
                         if (!keep[cat][mod]) keep[cat][mod] = [];
@@ -2173,6 +2344,8 @@
             window.employees.forEach(emp => { const k = normalizeString(emp.NRC); if (k) nrcOnly.set(k, emp); });
 
             const catFromType = t => {
+                const cp = customPrograms().find(p => t === p.key || t.includes(p.label.toLowerCase()));
+                if (cp) return cp.key;
                 if (t.includes('licens')) return 'licensingAtt';
                 if (t.includes('sales') || t.includes('product') || t.includes('p&s')) return 'sales';
                 if (t.includes('dev')) return 'development';
@@ -2486,6 +2659,7 @@
         }
 
         window.renderTable = function() {
+            renderProgramTabs();
             renderFyTabs();
             updateStats();
             const thead = document.getElementById('tableHeader');
@@ -2494,12 +2668,9 @@
             if (!thead || !tbody) return;
 
             let filtered = getFilteredEmployees();
-            if (window.currentTab === 'sales') filtered = filtered.filter(e => getTotalCategoryCount(e, 'sales') > 0);
-            else if (window.currentTab === 'development') filtered = filtered.filter(e => getTotalCategoryCount(e, 'development') > 0);
-            else if (window.currentTab === 'agency') filtered = filtered.filter(e => getTotalCategoryCount(e, 'agency') > 0);
-            else if (window.currentTab === 'vocational') filtered = filtered.filter(e => getTotalCategoryCount(e, 'vocational') > 0);
-            else if (window.currentTab === 'ycp') filtered = filtered.filter(e => getTotalCategoryCount(e, 'ycp') > 0);
-            else if (window.currentTab === 'licensing') filtered = filtered.filter(e => getTotalCategoryCount(e, 'licensingAtt') > 0 || (!window.activePeriod && hasBatch(e)));
+            const tabProgram = programForTab(window.currentTab);
+            if (tabProgram && tabProgram.key === 'licensingAtt') filtered = filtered.filter(e => getTotalCategoryCount(e, 'licensingAtt') > 0 || (!window.activePeriod && hasBatch(e)));
+            else if (tabProgram) filtered = filtered.filter(e => getTotalCategoryCount(e, tabProgram.key) > 0);
             else if (window.currentTab === 'summary' && window.activePeriod) filtered = filtered.filter(e => periodTotal(e) > 0);
 
             if (recordCount) recordCount.innerText = `Showing ${filtered.length} records`;
@@ -2580,28 +2751,29 @@
                 }).join('');
             } else {
                 // Render separate module tabs (Product & Sales, Development, Agency, Vocational, Youth Connect Program, Licensing)
-                let activeModules = window.salesModules;
-                let catKey = 'sales';
-                let colHeaderBg = 'bg-emerald-800';
-
-                if (window.currentTab === 'development') { activeModules = window.developmentModules; catKey = 'development'; colHeaderBg = 'bg-indigo-800'; }
-                else if (window.currentTab === 'agency') { activeModules = window.agencyModules; catKey = 'agency'; colHeaderBg = 'bg-orange-800'; }
-                else if (window.currentTab === 'vocational') { activeModules = window.vocationalModules; catKey = 'vocational'; colHeaderBg = 'bg-teal-800'; }
-                else if (window.currentTab === 'ycp') { activeModules = window.ycpModules; catKey = 'ycp'; colHeaderBg = 'bg-amber-800'; }
-                else if (window.currentTab === 'licensing') { activeModules = window.licensingDays; catKey = 'licensingAtt'; colHeaderBg = 'bg-purple-800'; }
-                activeModules = getModulesFor(catKey, activeModules);
+                const cfg = tabProgram || window.categoryConfig[0];
+                const catKey = cfg.key, colHeaderBg = cfg.head;
+                const activeModules = getModulesFor(catKey, cfg.base());
+                const admin = isAdminMode();
+                // a session can be removed when it was added later (not built in) and has no attendance at all
+                const builtinList = cfg.builtin ? BUILTIN_PROGRAMS.find(b => b.key === catKey).list().map(moduleKey) : [];
+                const removable = m => admin && !builtinList.includes(moduleKey(m)) && !window.employees.some(e => ((e[catKey] || {})[m] || []).length);
 
                 const isLic = catKey === 'licensingAtt';
                 const canEdit = canEditData();
                 let topRow = `<tr>
                     <th colspan="6" class="px-3 py-2 bg-blue-800 text-white text-center border-r border-blue-700">Identification</th>
                     ${isLic ? `<th class="px-3 py-2 bg-purple-900 text-white text-center border-r">Batch</th>` : ''}
-                    <th colspan="${activeModules.length}" class="px-3 py-2 ${colHeaderBg} text-white text-center capitalize border-r">${isLic ? 'Licensing Attendance' : window.currentTab + ' Modules'}</th>
+                    <th colspan="${activeModules.length}" class="px-3 py-2 ${colHeaderBg} text-white text-center border-r">${isLic ? 'Licensing Attendance' : escapeHtml(cfg.label) + ' Sessions'}</th>
                     ${isLic ? `<th colspan="${canEdit ? 6 : 5}" class="px-3 py-2 bg-purple-900 text-white text-center">Completion &amp; Exam Results</th>` : ''}
+                    ${admin ? `<th rowspan="2" class="px-2 py-2 bg-gray-50 text-center align-middle border-l whitespace-nowrap">
+                        <button type="button" onclick="addProgramSession('${catKey}')" class="text-blue-700 bg-white border border-blue-200 hover:bg-blue-50 px-2 py-1 rounded text-[11px] font-semibold cursor-pointer"><i class="fa-solid fa-plus mr-1"></i>Session</button>
+                        ${cfg.builtin ? '' : `<button type="button" onclick="openProgramModal('${catKey}')" class="mt-1 block w-full text-gray-700 bg-white border hover:bg-gray-50 px-2 py-1 rounded text-[11px] font-semibold cursor-pointer"><i class="fa-solid fa-pen mr-1"></i>Program</button>`}
+                    </th>` : ''}
                 </tr>`;
                 let subRow = `<tr><th class="px-3 py-2 bg-gray-100">ID Code</th><th class="px-3 py-2">Name</th><th class="px-3 py-2">Department</th><th class="px-3 py-2">Branch</th><th class="px-3 py-2">NRC</th><th class="px-3 py-2 border-r">Phone</th>`;
                 if (isLic) subRow += `<th class="px-2 py-2 text-[10px] bg-purple-50 border-r">Batch</th>`;
-                activeModules.forEach(m => subRow += `<th class="px-2 py-2 text-[10px] bg-gray-50">${m}</th>`);
+                activeModules.forEach(m => subRow += `<th class="px-2 py-2 text-[10px] bg-gray-50">${escapeHtml(m)}${removable(m) ? ` <button type="button" onclick="removeProgramSession('${catKey}', '${jsAttr(m)}')" title="Remove this session (no attendance recorded)" class="text-red-500 hover:text-red-700 font-bold cursor-pointer">&times;</button>` : ''}</th>`);
                 if (isLic) {
                     subRow += `<th class="px-2 py-2 text-[10px] bg-purple-100 border-l">Completion</th><th class="px-2 py-2 text-[10px] bg-purple-50">Pre Test Mark</th><th class="px-2 py-2 text-[10px] bg-purple-50">Pre Test Status</th><th class="px-2 py-2 text-[10px] bg-purple-50">NIIM Mark</th><th class="px-2 py-2 text-[10px] bg-purple-50">NIIM Status</th>`;
                     if (canEdit) subRow += `<th class="px-2 py-2 text-[10px] bg-purple-50">Results</th>`;
@@ -2625,6 +2797,7 @@
                         r += `<td class="px-2 py-2 text-xs text-center">${getStatusBadge(emp.licensing?.["NIIM Exam Status"])}</td>`;
                         if (canEdit) r += `<td class="px-2 py-2 text-center"><button type="button" onclick="openLicensingModal(${idx})" class="text-purple-700 bg-purple-50 hover:bg-purple-100 px-2 py-1 rounded text-xs font-semibold cursor-pointer">Edit</button></td>`;
                     }
+                    if (admin) r += '<td class="border-l"></td>';
                     return `<tr class="hover:bg-blue-50/50">${r}</tr>`;
                 }).join('');
             }
@@ -2767,7 +2940,7 @@
                 })));
                 return [...new Set(all)].sort();
             };
-            const options = [['Licensing', ['licensingAtt']], ['Agency', ['agency']], ['Training', ['sales', 'development', 'agency', 'vocational', 'ycp', 'licensingAtt']]];
+            const options = [['Licensing', ['licensingAtt']], ['Agency', ['agency']], ['Training', programKeys()]];
             for (const onlyPeriod of [true, false]) for (const [label, cats] of options) {
                 const dates = pick(cats, onlyPeriod);
                 if (dates.length) return { label, dates };
