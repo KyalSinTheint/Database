@@ -1181,7 +1181,7 @@
             if (!confirm(`Approve this request?\n\n${r.summary}`)) return;
             const res = await applyChange(r.kind, r.payload || {}, { by: r.requester_email });
             if (!res.ok) { alert('Could not apply: ' + res.msg + '\nYou can reject this request.'); return; }
-            if (!res.handled) { recalculateAllEmployeeIDs(`Approved request: ${r.summary}`); populateDropdowns(); renderTable(); await syncNow(); }
+            if (!res.handled) { recalculateAllEmployeeIDs('approved request'); populateDropdowns(); renderTable(); await syncNow(); }
             if (await setRequestStatus(r, 'approved')) {
                 logAudit('approve_request', r.target, { kind: r.kind, summary: r.summary, requester: r.requester_email });
                 loadRequests();
@@ -1595,22 +1595,38 @@
             return '';
         }
 
-        // context: why other people's ID codes may move (recorded in their history)
+        // ID codes are permanent:
+        //  - an existing code never changes because someone else is added, deleted or moved
+        //  - a code changes only when the person's own department / type needs another prefix
+        //  - new codes take the highest number ever used for that prefix + 1 (deleted numbers are never reused)
+        function splitId(id) { const m = String(id || '').match(/^(.*?)(\d+)$/); return m ? { prefix: m[1], num: +m[2] } : null; }
         function recalculateAllEmployeeIDs(context) {
-            const prefixCounters = {};
             const now = new Date().toISOString(), by = currentActor();
+            const saved = Object.assign({}, (window.dropdownOptions || {}).idCounters || {});
+            const counters = Object.assign({}, saved);
+            const bump = id => { const s2 = splitId(id); if (s2 && s2.prefix) counters[s2.prefix] = Math.max(counters[s2.prefix] || 0, s2.num); };
+            // every code ever given (current codes and codes in the change history) counts as used
+            window.employees.forEach(emp => { bump(emp.EmpID); (Array.isArray(emp.history) ? emp.history : []).forEach(h => { bump(h.idFrom); bump(h.idTo); }); });
+            const taken = new Set();
             window.employees.forEach(emp => {
                 const old = emp.EmpID;
                 const prefix = getPrefixForDeptAndType(emp.Department, emp.InternalExternal);
-                prefixCounters[prefix] = (prefixCounters[prefix] || 0) + 1;
-                emp.EmpID = prefix + String(prefixCounters[prefix]).padStart(4, '0');
+                const cur = splitId(old);
+                if (!(cur && cur.prefix === prefix && !taken.has(old))) {
+                    counters[prefix] = (counters[prefix] || 0) + 1;
+                    emp.EmpID = prefix + String(counters[prefix]).padStart(4, '0');
+                }
+                taken.add(emp.EmpID);
                 const h = Array.isArray(emp.history) ? emp.history : [];
                 const pending = h.filter(x => x._pending);
                 if (pending.length) pending.forEach(x => { x.idTo = emp.EmpID; delete x._pending; });
-                else if (old && old !== emp.EmpID && context && isAdminMode()) {
-                    emp.history = h.concat({ at: now, by, reason: 'renumbered', note: context, changes: [], idFrom: old, idTo: emp.EmpID });
+                else if (old && old !== emp.EmpID && isAdminMode()) {
+                    const why = cur && cur.prefix === prefix ? 'This ID code was also used by another record, so a new unique code was given' : 'Department / type needs another ID prefix';
+                    emp.history = h.concat({ at: now, by, reason: 'renumbered', note: context ? `${why} (${context})` : why, changes: [], idFrom: old, idTo: emp.EmpID });
                 }
             });
+            // remember the highest numbers so deleted codes are never given again
+            if (isAdminMode() && JSON.stringify(counters) !== JSON.stringify(saved)) window.dropdownOptions.idCounters = counters;
             saveData();
             renderTable();
         }
@@ -2319,7 +2335,7 @@
             });
             if (!combined) { alert(skipped ? 'Selected matches overlap with ones already combined. Scan again.' : 'Tick "Combine" on the matches you want to merge.'); return; }
             window.employees = window.employees.filter(e => !removed.has(e));
-            recalculateAllEmployeeIDs('Duplicate records were combined, so the following numbers moved up');
+            recalculateAllEmployeeIDs('records combined');
             logAudit('combine_records', `${combined} pair(s)`, { merges });
             alert(`Combined ${combined} pair(s) successfully!` + (skipped ? `\n${skipped} overlapping match(es) skipped; scan again to review them.` : ''));
             runTypoAuditScan();
@@ -2566,7 +2582,7 @@
                 if (changes.length) addHistory(emp, { reason: 'import', note: `Updated by import: ${fileName || 'file'}`, changes });
             });
 
-            recalculateAllEmployeeIDs(`Import of ${fileName || 'a file'} added or moved people`);
+            recalculateAllEmployeeIDs(`import of ${fileName || 'a file'}`);
             populateDropdowns();
             renderTable();
 
@@ -3954,7 +3970,7 @@
                 addHistory(window.employees[window.employees.length - 1], { reason: 'created', note: 'Added manually' });
             }
 
-            recalculateAllEmployeeIDs(before ? `Other ID codes moved because ${nameVal}'s department/type changed` : '');
+            recalculateAllEmployeeIDs('');
             if (before) {
                 const emp = window.employees[index];
                 const changes = FIELDS.filter(k => before[k] !== fieldVal(emp, k)).map(k => ({ field: k, from: before[k], to: fieldVal(emp, k) }));
@@ -3978,7 +3994,7 @@
             if (!confirm(`Delete ${emp.Name} (${emp.EmpID})? All of this person's training records will be removed.`)) return;
             logAudit('delete_employee', `${emp.EmpID} ${emp.Name}`, { NRC: emp.NRC, Department: emp.Department, sessions: attendanceTotal(emp) });
             window.employees.splice(index, 1);
-            recalculateAllEmployeeIDs(`${emp.EmpID} ${emp.Name} was deleted, so the following numbers moved up`);
+            recalculateAllEmployeeIDs('');   // other people keep their codes; this code is never reused
             renderTable();
         };
 
