@@ -678,6 +678,15 @@
                         <input type="text" id="empRemark" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g. Resigned on 1 Oct 2026">
                     </div>
                 </div>
+                <div id="empReasonBox" class="hidden bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    <div class="grid grid-cols-5 gap-2">
+                        <label class="col-span-2 block text-xs font-semibold uppercase text-gray-700">Why is this changed? *
+                            <select id="empReason" class="w-full mt-1 px-2 py-2 border rounded-lg text-sm bg-white cursor-pointer font-normal normal-case"></select></label>
+                        <label class="col-span-3 block text-xs font-semibold uppercase text-gray-700">Note
+                            <input type="text" id="empReasonNote" maxlength="200" class="w-full mt-1 px-3 py-2 border rounded-lg text-sm font-normal normal-case" placeholder="e.g. NRC was typed wrongly / transferred on 1 Nov 2026"></label>
+                    </div>
+                    <p class="text-[11px] text-amber-800 mt-1.5">Saved in this person's change history together with what changed, who changed it and when.</p>
+                </div>
                 <p class="user-approval-note hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5"><i class="fa-solid fa-user-check mr-1"></i>Your change will be sent to an admin for approval.</p>
                 <div class="pt-4 flex justify-end gap-2 border-t">
                     <button type="button" onclick="closeEmployeeModal()" class="px-4 py-2 border rounded-lg text-sm font-medium text-gray-600 cursor-pointer">Cancel</button>
@@ -688,6 +697,18 @@
     </div>
 
     <!-- ATTENDANCE DATE MANAGEMENT MODAL -->
+    <!-- CHANGE HISTORY (one person) -->
+    <div id="historyModal" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-2xl w-full p-5 shadow-2xl max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center mb-1">
+                <h3 class="text-base font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left text-blue-700"></i> Change history</h3>
+                <button type="button" onclick="closeHistory()" class="text-gray-400 hover:text-gray-600 text-xl font-bold cursor-pointer">&times;</button>
+            </div>
+            <p id="historySubtitle" class="text-xs text-gray-500 mb-3"></p>
+            <div id="historyList" class="overflow-y-auto space-y-2 text-xs flex-1"></div>
+        </div>
+    </div>
+
     <!-- PROGRAM (add / edit a training program and its sessions) -->
     <div id="programModal" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4">
         <form onsubmit="saveProgramModal(event)" class="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl max-h-[92vh] overflow-y-auto text-sm">
@@ -1035,18 +1056,25 @@
         }
 
         // Applies an approved request to the data (admin side)
-        async function applyChange(kind, p) {
+        async function applyChange(kind, p, meta = {}) {
             const missing = { ok: false, msg: 'The person in this request was not found (maybe deleted or renamed).' };
             if (kind === 'import_file') { await importRows(p.rows || [], p.fileName || 'file'); return { ok: true, handled: true }; }
             if (kind === 'add_employee') {
                 const rec = Object.assign({ sales: {}, development: {}, agency: {}, vocational: {}, ycp: {}, licensingAtt: {}, licensing: {} }, p.record || {});
                 rec.uid = newUid();
                 window.employees.push(rec);
+                addHistory(rec, { reason: 'created', note: 'Added through an approved request', by: meta.by || currentActor(), approvedBy: currentActor() });
                 return { ok: true };
             }
             const e = findTarget(p.target);
             if (!e) return missing;
-            if (kind === 'edit_employee') { (p.changes || []).forEach(c => { if (EMP_FIELDS.includes(c.field)) e[c.field] = c.to; }); return { ok: true }; }
+            if (kind === 'edit_employee') {
+                const applied = (p.changes || []).filter(c => EMP_FIELDS.includes(c.field));
+                const real = applied.filter(c => fieldVal(e, c.field) !== String(c.to ?? '').trim()).map(c => ({ field: c.field, from: fieldVal(e, c.field), to: String(c.to ?? '').trim() }));
+                applied.forEach(c => { e[c.field] = c.to; });
+                addHistory(e, { reason: p.reason || 'other', note: p.note || '', changes: real, by: meta.by || currentActor(), approvedBy: currentActor() });
+                return { ok: true };
+            }
             if (kind === 'delete_employee') { window.employees.splice(window.employees.indexOf(e), 1); return { ok: true }; }
             if (kind === 'edit_licensing') {
                 e.licensing = Object.assign({}, e.licensing || {});
@@ -1101,7 +1129,7 @@
         function requestDetails(r) {
             const p = r.payload || {};
             const li = t => `<li>${t}</li>`;
-            if (Array.isArray(p.changes)) return '<ul class="list-disc ml-4">' + p.changes.map(c => li(`<b>${escapeHtml(c.field)}</b>: ${escapeHtml(c.from || '-')} → <span class="text-emerald-700 font-semibold">${escapeHtml(c.to || '-')}</span>`)).join('') + '</ul>';
+            if (Array.isArray(p.changes)) return (p.reason ? `<div class="mb-1"><b>Reason:</b> ${escapeHtml(HISTORY_REASONS[p.reason] || p.reason)}${p.note ? ' – ' + escapeHtml(p.note) : ''}</div>` : '') + '<ul class="list-disc ml-4">' + p.changes.map(c => li(`<b>${escapeHtml(fieldLabel(c.field))}</b>: ${escapeHtml(c.from || '-')} → <span class="text-emerald-700 font-semibold">${escapeHtml(c.to || '-')}</span>`)).join('') + '</ul>';
             if (r.kind === 'add_employee') return '<ul class="list-disc ml-4">' + Object.entries(p.record || {}).filter(([, v]) => v).map(([k, v]) => li(`<b>${escapeHtml(k)}</b>: ${escapeHtml(v)}`)).join('') + '</ul>';
             if (r.kind === 'import_file') {
                 const rows = p.rows || [];
@@ -1151,9 +1179,9 @@
             const r = window.requests.find(x => x.id === id);
             if (!r || r.status !== 'pending') return;
             if (!confirm(`Approve this request?\n\n${r.summary}`)) return;
-            const res = await applyChange(r.kind, r.payload || {});
+            const res = await applyChange(r.kind, r.payload || {}, { by: r.requester_email });
             if (!res.ok) { alert('Could not apply: ' + res.msg + '\nYou can reject this request.'); return; }
-            if (!res.handled) { recalculateAllEmployeeIDs(); populateDropdowns(); renderTable(); await syncNow(); }
+            if (!res.handled) { recalculateAllEmployeeIDs(`Approved request: ${r.summary}`); populateDropdowns(); renderTable(); await syncNow(); }
             if (await setRequestStatus(r, 'approved')) {
                 logAudit('approve_request', r.target, { kind: r.kind, summary: r.summary, requester: r.requester_email });
                 loadRequests();
@@ -1530,16 +1558,92 @@
             return prefix;
         }
 
-        function recalculateAllEmployeeIDs() {
+        // ---------------- Change history (per person) ----------------
+        const HISTORY_REASONS = {
+            correction: 'Correction (typing mistake)', transfer: 'Department transfer', permanent: 'Became permanent (External → Internal)',
+            type_change: 'Internal / External change', promotion: 'Promotion / position change', status: 'Resigned / rejoined',
+            contact: 'Contact / branch update', other: 'Other',
+            created: 'Record created', import: 'Updated by import', merge: 'Records combined', renumbered: 'ID code renumbered'
+        };
+        const FIELD_LABELS = { InternalExternal: 'Type (Internal/External)', PhoneNumber: 'Phone', BranchName: 'Branch', NRC: 'NRC', 'NIIM Exam Mark': 'NIIM Mark', 'NIIM Exam Status': 'NIIM Status' };
+        function fieldLabel(k) { return FIELD_LABELS[k] || k; }
+        // empty Status means Active, empty Type means Internal (as shown in the form)
+        function fieldVal(o, k) {
+            const v = String((o || {})[k] ?? '').trim();
+            if (k === 'Status') return v || 'Active';
+            if (k === 'InternalExternal') return v || 'Internal';
+            return v;
+        }
+        const EDIT_REASONS = ['correction', 'transfer', 'permanent', 'type_change', 'promotion', 'status', 'contact', 'other'];
+        function currentActor() { return (window.authUser || {}).email || (supabaseClient ? 'unknown' : 'this computer'); }
+        // The entry gets the person's new ID code when IDs are recalculated
+        function addHistory(emp, entry) {
+            emp.history = (Array.isArray(emp.history) ? emp.history : []).concat(Object.assign({
+                at: new Date().toISOString(), by: currentActor(), reason: 'other', note: '', changes: [], idFrom: emp.EmpID || null
+            }, entry, { _pending: true }));
+        }
+        // Suggested reason from what was changed in the edit form
+        function suggestReason(changes) {
+            const f = Object.fromEntries(changes.map(c => [c.field, c]));
+            if (f.InternalExternal && /ext/i.test(f.InternalExternal.from) && /int/i.test(f.InternalExternal.to)) return 'permanent';
+            if (f.Department) return 'transfer';
+            if (f.InternalExternal) return 'type_change';
+            if (f.Status) return 'status';
+            if (f.Position) return 'promotion';
+            if (f.Name || f.NRC) return 'correction';
+            if (f.PhoneNumber || f.BranchName || f.Region) return 'contact';
+            return '';
+        }
+
+        // context: why other people's ID codes may move (recorded in their history)
+        function recalculateAllEmployeeIDs(context) {
             const prefixCounters = {};
+            const now = new Date().toISOString(), by = currentActor();
             window.employees.forEach(emp => {
+                const old = emp.EmpID;
                 const prefix = getPrefixForDeptAndType(emp.Department, emp.InternalExternal);
                 prefixCounters[prefix] = (prefixCounters[prefix] || 0) + 1;
                 emp.EmpID = prefix + String(prefixCounters[prefix]).padStart(4, '0');
+                const h = Array.isArray(emp.history) ? emp.history : [];
+                const pending = h.filter(x => x._pending);
+                if (pending.length) pending.forEach(x => { x.idTo = emp.EmpID; delete x._pending; });
+                else if (old && old !== emp.EmpID && context && isAdminMode()) {
+                    emp.history = h.concat({ at: now, by, reason: 'renumbered', note: context, changes: [], idFrom: old, idTo: emp.EmpID });
+                }
             });
             saveData();
             renderTable();
         }
+
+        function historyLine(h) {
+            const d = new Date(h.at);
+            return `${HISTORY_REASONS[h.reason] || h.reason} · ${isNaN(d) ? '' : shortDate(ymd(d))}`;
+        }
+        window.openHistory = function(idx) {
+            const emp = window.employees[idx];
+            if (!emp) return;
+            const list = (Array.isArray(emp.history) ? emp.history : []).slice().reverse();
+            document.getElementById('historySubtitle').textContent = `${emp.EmpID || '-'} · ${emp.Name || '-'} · ${emp.NRC || 'No NRC'} — ${list.length} entr${list.length === 1 ? 'y' : 'ies'}`;
+            const colour = r => ({ correction: 'bg-amber-100 text-amber-800', renumbered: 'bg-gray-200 text-gray-700', created: 'bg-emerald-100 text-emerald-800',
+                merge: 'bg-indigo-100 text-indigo-800', import: 'bg-sky-100 text-sky-800' }[r] || 'bg-blue-100 text-blue-800');
+            document.getElementById('historyList').innerHTML = list.length ? list.map(h => {
+                const d = new Date(h.at);
+                const idChange = h.idFrom && h.idTo && h.idFrom !== h.idTo
+                    ? `<div class="mt-1"><b>ID code:</b> <span class="font-mono line-through text-gray-500">${escapeHtml(h.idFrom)}</span> → <span class="font-mono font-bold text-blue-700">${escapeHtml(h.idTo)}</span></div>`
+                    : (h.reason === 'created' && h.idTo ? `<div class="mt-1"><b>ID code given:</b> <span class="font-mono font-bold text-blue-700">${escapeHtml(h.idTo)}</span></div>` : '');
+                return `<div class="border rounded-lg p-3">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="px-2 py-0.5 rounded text-[11px] font-bold ${colour(h.reason)}">${escapeHtml(HISTORY_REASONS[h.reason] || h.reason)}</span>
+                        <span class="text-gray-500">${escapeHtml(isNaN(d) ? '' : d.toLocaleString())} · by ${escapeHtml(h.by || '-')}${h.approvedBy ? ` · approved by ${escapeHtml(h.approvedBy)}` : ''}</span>
+                    </div>
+                    ${h.note ? `<div class="mt-1 text-gray-800">${escapeHtml(h.note)}</div>` : ''}
+                    ${(h.changes || []).length ? '<ul class="mt-1 list-disc ml-4">' + h.changes.map(c => `<li><b>${escapeHtml(fieldLabel(c.field))}</b>: <span class="text-gray-500">${escapeHtml(c.from || '-')}</span> → <span class="text-emerald-700 font-semibold">${escapeHtml(c.to || '-')}</span></li>`).join('') + '</ul>' : ''}
+                    ${idChange}
+                </div>`;
+            }).join('') : '<div class="text-center text-gray-500 py-8">No changes recorded yet.</div>';
+            document.getElementById('historyModal').classList.remove('hidden');
+        };
+        window.closeHistory = function() { document.getElementById('historyModal').classList.add('hidden'); };
 
         function normalizeEmployeesData() {
             if (!Array.isArray(window.employees)) return;
@@ -1949,7 +2053,8 @@
             const fBranchVal = filterBranch ? filterBranch.value : '';
 
             return window.employees.filter(emp => {
-                const matchSearch = !searchTerm || [emp.EmpID, emp.Name, emp.NRC, emp.Position, emp.Department, emp.Region, emp.BranchName, emp.PhoneNumber].some(val => String(val || '').toLowerCase().includes(searchTerm));
+                const oldIds = (Array.isArray(emp.history) ? emp.history : []).map(h => h.idFrom).filter(Boolean);
+                const matchSearch = !searchTerm || [emp.EmpID, emp.Name, emp.NRC, emp.Position, emp.Department, emp.Region, emp.BranchName, emp.PhoneNumber, ...oldIds].some(val => String(val || '').toLowerCase().includes(searchTerm));
                 const matchDept = !fDeptVal || emp.Department === fDeptVal;
                 const matchBranch = !fBranchVal || emp.BranchName === fBranchVal;
                 return matchSearch && matchDept && matchBranch;
@@ -2187,6 +2292,7 @@
                 const nameFrom = item.nameDiffers ? (pick(item, 'name') === 1 ? item.emp1 : item.emp2) : keep;
                 const nrcFrom = item.nrcDiffers ? (pick(item, 'nrc') === 1 ? item.emp1 : item.emp2) : keep;
                 const before = `${keep.EmpID} ${keep.Name} (${keep.NRC || '-'}) + ${other.EmpID} ${other.Name} (${other.NRC || '-'})`;
+                const beforeName = keep.Name, beforeNrc = keep.NRC;
                 keep.Name = nameFrom.Name;
                 keep.NRC = nrcFrom.NRC;
                 // attendance: union of dates
@@ -2201,13 +2307,19 @@
                 // profile and licensing results: keep the chosen record's values, fill blanks from the other
                 ['Position', 'PhoneNumber', 'Department', 'BranchName', 'Region', 'InternalExternal', 'Remark'].forEach(k => { if (!keep[k] && other[k]) keep[k] = other[k]; });
                 keep.licensing = Object.assign({}, other.licensing || {}, keep.licensing || {});
+                // keep both histories, then record the merge
+                keep.history = (Array.isArray(other.history) ? other.history : []).concat(Array.isArray(keep.history) ? keep.history : []).sort((a, b) => String(a.at).localeCompare(String(b.at)));
+                const mergeChanges = [];
+                if (beforeName !== keep.Name) mergeChanges.push({ field: 'Name', from: beforeName, to: keep.Name });
+                if (beforeNrc !== keep.NRC) mergeChanges.push({ field: 'NRC', from: beforeNrc || '', to: keep.NRC || '' });
+                addHistory(keep, { reason: 'merge', note: `Combined with duplicate record ${other.EmpID || '-'} ${other.Name || '-'} (${other.NRC || 'no NRC'})`, changes: mergeChanges });
                 removed.add(other);
                 merges.push(`${before} → ${keep.Name} (${keep.NRC || '-'})`);
                 combined++;
             });
             if (!combined) { alert(skipped ? 'Selected matches overlap with ones already combined. Scan again.' : 'Tick "Combine" on the matches you want to merge.'); return; }
             window.employees = window.employees.filter(e => !removed.has(e));
-            recalculateAllEmployeeIDs();
+            recalculateAllEmployeeIDs('Duplicate records were combined, so the following numbers moved up');
             logAudit('combine_records', `${combined} pair(s)`, { merges });
             alert(`Combined ${combined} pair(s) successfully!` + (skipped ? `\n${skipped} overlapping match(es) skipped; scan again to review them.` : ''));
             runTypoAuditScan();
@@ -2367,6 +2479,7 @@
             const get = (vals, col) => (col !== -1 && vals[col] !== undefined) ? String(vals[col]).trim() : '';
 
             let newPeople = 0, updatedPeople = 0, newAttendance = 0, alreadyRecorded = 0, sameNrcDifferentName = 0, licUpdated = 0;
+            const importBefore = new Map();
             const touched = new Set();
 
             for (let i = 1; i < rows.length; i++) {
@@ -2399,6 +2512,8 @@
                     updatedPeople++;
                 }
                 touched.add(empObj);
+                if (!isNew && !importBefore.has(empObj)) importBefore.set(empObj, Object.fromEntries(EMP_FIELDS.map(k => [k, fieldVal(empObj, k)])));
+                if (isNew && !(empObj.history || []).length) addHistory(empObj, { reason: 'created', note: `Imported from ${fileName || 'a file'}` });
 
                 // update profile fields when the file has a value
                 if (get(vals, colPos)) empObj.Position = get(vals, colPos);
@@ -2445,8 +2560,13 @@
                 if (!window.dropdownOptions[type].some(x => x.toLowerCase() === v.toLowerCase())) window.dropdownOptions[type].push(v);
             };
             touched.forEach(emp => { addOpt('departments', emp.Department); addOpt('branches', emp.BranchName); addOpt('regions', emp.Region); });
+            // profile details changed by the file are recorded in each person's history
+            importBefore.forEach((b, emp) => {
+                const changes = EMP_FIELDS.filter(k => b[k] !== fieldVal(emp, k)).map(k => ({ field: k, from: b[k], to: fieldVal(emp, k) }));
+                if (changes.length) addHistory(emp, { reason: 'import', note: `Updated by import: ${fileName || 'file'}`, changes });
+            });
 
-            recalculateAllEmployeeIDs();
+            recalculateAllEmployeeIDs(`Import of ${fileName || 'a file'} added or moved people`);
             populateDropdowns();
             renderTable();
 
@@ -2551,6 +2671,17 @@
             })));
             log.sort((a, b) => String(a.Date).localeCompare(String(b.Date)) || a.Name.localeCompare(b.Name));
             addSheet('Attendance Log', log);
+
+            // 4) Change history: what changed, why, who and when
+            const hist = [];
+            list.forEach(emp => (Array.isArray(emp.history) ? emp.history : []).forEach(h => hist.push({
+                "Current ID": emp.EmpID || '', "Name": emp.Name || '', "NRC": emp.NRC || '',
+                "Date": (d => isNaN(d) ? '' : d.toLocaleString())(new Date(h.at)), "Reason": HISTORY_REASONS[h.reason] || h.reason || '', "Note": h.note || '',
+                "What changed": (h.changes || []).map(c => `${fieldLabel(c.field)}: ${c.from || '-'} → ${c.to || '-'}`).join('; '),
+                "Old ID": h.idFrom || '', "New ID": h.idTo || '', "By": h.by || '', "Approved by": h.approvedBy || ''
+            })));
+            hist.sort((a, b) => String(a["Current ID"]).localeCompare(String(b["Current ID"])));
+            addSheet('Change History', hist);
 
             const periodName = window.activePeriod ? window.activePeriod.label.replace(/\s+/g, '_') : 'All_years';
             XLSX.writeFile(wb, `Training_Database_${periodName}_${ymd(new Date())}.xlsx`);
@@ -2744,7 +2875,12 @@
                             <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-xs bg-gray-100 font-medium">${emp.InternalExternal || 'Internal'}</span></td>
                             <td class="px-4 py-3">${emp.BranchName || '-'}</td>
                             <td class="px-4 py-3 font-mono text-xs">${emp.NRC}</td>
-                            <td class="px-4 py-3 text-xs">${statusBadge(emp)}${emp.Remark ? `<div class="text-gray-500 mt-0.5">${escapeHtml(emp.Remark)}</div>` : ''}</td>
+                            <td class="px-4 py-3 text-xs">${statusBadge(emp)}${emp.Remark ? `<div class="text-gray-500 mt-0.5">${escapeHtml(emp.Remark)}</div>` : ''}${(() => {
+                                const h = (Array.isArray(emp.history) ? emp.history : []).filter(x => x.reason !== 'created');
+                                if (!h.length) return '';
+                                const last = h[h.length - 1];
+                                return `<button type="button" onclick="openHistory(${idx})" title="Show change history" class="mt-1 block text-left text-blue-700 hover:underline cursor-pointer"><i class="fa-solid fa-clock-rotate-left mr-1"></i>${escapeHtml(historyLine(last))}${h.length > 1 ? ` (+${h.length - 1})` : ''}${last.idFrom && last.idTo && last.idFrom !== last.idTo ? ` <span class="font-mono text-gray-500">was ${escapeHtml(last.idFrom)}</span>` : ''}</button>`;
+                            })()}</td>
                             ${canEditData() ? `<td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">${actionsHtml}</td>` : ''}
                         </tr>
                     `;
@@ -3704,6 +3840,7 @@
             document.getElementById('editIndex').value = "-1";
             document.getElementById('employeeForm').reset();
             document.getElementById('empSubmitBtn').textContent = isAdminMode() ? 'Save Employee' : 'Send for approval';
+            document.getElementById('empReasonBox').classList.add('hidden');
             document.getElementById('employeeModal').classList.remove('hidden');
         };
 
@@ -3722,8 +3859,33 @@
             document.getElementById('empStatus').value = emp.Status === 'Resigned' ? 'Resigned' : 'Active';
             document.getElementById('empRemark').value = emp.Remark || '';
             document.getElementById('empSubmitBtn').textContent = isAdminMode() ? 'Save Employee' : 'Send for approval';
+            const rs = document.getElementById('empReason');
+            rs.innerHTML = '<option value="">— choose a reason —</option>' + EDIT_REASONS.map(r => `<option value="${r}">${HISTORY_REASONS[r]}</option>`).join('');
+            rs.dataset.picked = '';
+            document.getElementById('empReasonNote').value = '';
+            document.getElementById('empReasonBox').classList.remove('hidden');
             document.getElementById('employeeModal').classList.remove('hidden');
         };
+        // Suggest a reason while the form is edited (until the person picks one)
+        function readEmployeeForm() {
+            const v = id => document.getElementById(id).value;
+            return { Name: v('empName').trim(), NRC: v('empNRC').trim(), Position: v('empPosition'), PhoneNumber: v('empPhone'), Department: v('empDept'),
+                InternalExternal: v('empType'), Region: v('empRegion'), BranchName: v('empBranch'), Status: v('empStatus'), Remark: v('empRemark').trim() };
+        }
+        function formChanges(emp, form) {
+            return EMP_FIELDS.filter(k => fieldVal(emp, k) !== fieldVal(form, k)).map(k => ({ field: k, from: fieldVal(emp, k), to: fieldVal(form, k) }));
+        }
+        document.addEventListener('input', ev => {
+            if (!ev.target.closest || !ev.target.closest('#employeeForm')) return;
+            const rs = document.getElementById('empReason');
+            if (ev.target === rs) { rs.dataset.picked = rs.value ? '1' : ''; return; }
+            const idx = parseInt(document.getElementById('editIndex').value);
+            if (idx === -1 || rs.dataset.picked) return;
+            const emp = window.employees[idx];
+            if (emp) rs.value = suggestReason(formChanges(emp, readEmployeeForm()));
+        });
+        document.addEventListener('change', ev => { if (ev.target && ev.target.closest && ev.target.closest('#employeeForm') && ev.target.id !== 'empReason') ev.target.dispatchEvent(new Event('input', { bubbles: true })); });
+
         window.closeEmployeeModal = function() { document.getElementById('employeeModal').classList.add('hidden'); };
 
         window.saveEmployee = function(event) {
@@ -3735,7 +3897,14 @@
             const rawNrc = document.getElementById('empNRC').value;
 
             const FIELDS = EMP_FIELDS;
-            const before = index !== -1 ? Object.fromEntries(FIELDS.map(k => [k, window.employees[index][k] || ''])) : null;
+            const before = index !== -1 ? Object.fromEntries(FIELDS.map(k => [k, fieldVal(window.employees[index], k)])) : null;
+            const reason = document.getElementById('empReason').value, reasonNote = document.getElementById('empReasonNote').value.trim();
+            if (index !== -1) {
+                const ch = formChanges(window.employees[index], readEmployeeForm());
+                if (!ch.length) { alert('Nothing was changed.'); return; }
+                if (!reason) { alert('Please choose why this is changed (for example "Correction" if it was typed wrongly).'); document.getElementById('empReason').focus(); return; }
+                if (reason === 'other' && !reasonNote) { alert('Please write a short note for "Other".'); document.getElementById('empReasonNote').focus(); return; }
+            }
             if (!isAdminMode()) {   // user: send a request instead of saving
                 const form = {
                     Name: nameVal, NRC: (rawNrc || '').trim(), Position: document.getElementById('empPosition').value,
@@ -3745,10 +3914,10 @@
                 };
                 if (index !== -1) {
                     const emp = window.employees[index];
-                    const changes = FIELDS.filter(k => String(before[k]) !== String(form[k] || '')).map(k => ({ field: k, from: String(before[k]), to: String(form[k] || '') }));
+                    const changes = FIELDS.filter(k => before[k] !== fieldVal(form, k)).map(k => ({ field: k, from: before[k], to: fieldVal(form, k) }));
                     if (!changes.length) { alert('Nothing was changed.'); return; }
-                    submitChange('edit_employee', `${emp.EmpID} ${emp.Name}`, `Edit ${emp.Name} (${emp.EmpID}): ` + changes.map(c => `${c.field} ${c.from || '-'} → ${c.to || '-'}`).join('; '),
-                        { target: targetOf(emp), changes }).then(ok => { if (ok) closeEmployeeModal(); });
+                    submitChange('edit_employee', `${emp.EmpID} ${emp.Name}`, `Edit ${emp.Name} (${emp.EmpID}) – ${HISTORY_REASONS[reason]}${reasonNote ? ': ' + reasonNote : ''}: ` + changes.map(c => `${c.field} ${c.from || '-'} → ${c.to || '-'}`).join('; '),
+                        { target: targetOf(emp), changes, reason, note: reasonNote }).then(ok => { if (ok) closeEmployeeModal(); });
                 } else {
                     submitChange('add_employee', form.Name, `Add ${form.Name} (${form.NRC || 'no NRC'}, ${form.Department || '-'})`, { record: form })
                         .then(ok => { if (ok) closeEmployeeModal(); });
@@ -3767,6 +3936,7 @@
                 emp.BranchName = document.getElementById('empBranch').value;
                 emp.Status = document.getElementById('empStatus').value;
                 emp.Remark = document.getElementById('empRemark').value.trim();
+                addHistory(emp, { reason, note: reasonNote, changes: FIELDS.filter(k => before[k] !== fieldVal(emp, k)).map(k => ({ field: k, from: before[k], to: fieldVal(emp, k) })), idFrom: emp.EmpID });
             } else {
                 window.employees.push({
                     Name: nameVal,
@@ -3781,12 +3951,13 @@
                     Remark: document.getElementById('empRemark').value.trim(),
                     sales: {}, development: {}, agency: {}, vocational: {}, ycp: {}, licensingAtt: {}, licensing: {}
                 });
+                addHistory(window.employees[window.employees.length - 1], { reason: 'created', note: 'Added manually' });
             }
 
-            recalculateAllEmployeeIDs();
+            recalculateAllEmployeeIDs(before ? `Other ID codes moved because ${nameVal}'s department/type changed` : '');
             if (before) {
                 const emp = window.employees[index];
-                const changes = FIELDS.filter(k => String(before[k]) !== String(emp[k] || '')).map(k => ({ field: k, from: String(before[k]), to: String(emp[k] || '') }));
+                const changes = FIELDS.filter(k => before[k] !== fieldVal(emp, k)).map(k => ({ field: k, from: before[k], to: fieldVal(emp, k) }));
                 if (changes.length) logAudit('edit_employee', `${emp.EmpID} ${emp.Name}`, { changes });
             } else {
                 const emp = window.employees[window.employees.length - 1];
@@ -3807,7 +3978,7 @@
             if (!confirm(`Delete ${emp.Name} (${emp.EmpID})? All of this person's training records will be removed.`)) return;
             logAudit('delete_employee', `${emp.EmpID} ${emp.Name}`, { NRC: emp.NRC, Department: emp.Department, sessions: attendanceTotal(emp) });
             window.employees.splice(index, 1);
-            recalculateAllEmployeeIDs();
+            recalculateAllEmployeeIDs(`${emp.EmpID} ${emp.Name} was deleted, so the following numbers moved up`);
             renderTable();
         };
 
