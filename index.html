@@ -1613,8 +1613,16 @@
                 const prefix = getPrefixForDeptAndType(emp.Department, emp.InternalExternal);
                 const cur = splitId(old);
                 if (!(cur && cur.prefix === prefix && !taken.has(old))) {
-                    counters[prefix] = (counters[prefix] || 0) + 1;
-                    emp.EmpID = prefix + String(counters[prefix]).padStart(4, '0');
+                    // moving back to a prefix this person had before (e.g. a change that is undone)
+                    // gives back their own earlier code; nobody else can have it
+                    const own = (Array.isArray(emp.history) ? emp.history : []).flatMap(x => [x.idFrom, x.idTo])
+                        .filter(id => { const s2 = splitId(id); return s2 && s2.prefix === prefix && id !== old && !taken.has(id) && !window.employees.some(o => o !== emp && o.EmpID === id); })
+                        .pop();
+                    if (own) emp.EmpID = own;
+                    else {
+                        counters[prefix] = (counters[prefix] || 0) + 1;
+                        emp.EmpID = prefix + String(counters[prefix]).padStart(4, '0');
+                    }
                 }
                 taken.add(emp.EmpID);
                 const h = Array.isArray(emp.history) ? emp.history : [];
